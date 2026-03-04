@@ -8,7 +8,8 @@
     "apply:pdf": "node src/index.mjs --apply --include pdf",
     "apply:photos": "node src/index.mjs --apply --include photos",
     "apply:docs": "node src/index.mjs --apply --include docs",
-    "organize": "node src/organize.mjs"
+    "organize": "node src/organize.mjs",
+    "organize:smart": "node src/organize.mjs --smart"
   },
   "dependencies": {
     "@langchain/core": "^1.1.29",

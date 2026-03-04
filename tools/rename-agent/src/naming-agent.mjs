@@ -44,14 +44,19 @@ function responseToText(content) {
     return content
       .map((part) => {
         if (typeof part === "string") return part;
-        if (part && typeof part === "object" && typeof part.text === "string") return part.text;
+        if (part && typeof part === "object" && typeof part.text === "string")
+          return part.text;
         return "";
       })
       .join("\n")
       .trim();
   }
 
-  if (content && typeof content === "object" && typeof content.text === "string") {
+  if (
+    content &&
+    typeof content === "object" &&
+    typeof content.text === "string"
+  ) {
     return content.text;
   }
 
@@ -125,42 +130,79 @@ function ensurePersonAndDate(baseName, person, date) {
   const personTokens = tokenizeName(person);
   const dateTokens = tokenizeName(normalizeDateToken(date));
 
-  let baseTokens = tokenizeName(baseName)
-    .filter((token) => !personTokens.includes(token) && !dateTokens.includes(token));
+  let baseTokens = tokenizeName(baseName).filter(
+    (token) => !personTokens.includes(token) && !dateTokens.includes(token),
+  );
 
   baseTokens = uniqueTokens(baseTokens);
   const fixedTail = uniqueTokens([...personTokens, ...dateTokens]);
 
   let finalTokens = uniqueTokens([...baseTokens, ...fixedTail]);
 
-  while (sanitizeBaseName(finalTokens.join("_")).length > maxLength && baseTokens.length > 1) {
+  while (
+    sanitizeBaseName(finalTokens.join("_")).length > maxLength &&
+    baseTokens.length > 1
+  ) {
     baseTokens = baseTokens.slice(0, -1);
     finalTokens = uniqueTokens([...baseTokens, ...fixedTail]);
   }
 
   const finalName = sanitizeBaseName(finalTokens.join("_"));
-  return finalName.length > maxLength ? finalName.slice(0, maxLength) : finalName;
+  return finalName.length > maxLength
+    ? finalName.slice(0, maxLength)
+    : finalName;
 }
 
-export async function suggestName({ llm, file, content, rules }) {
+const LANG_PROMPTS = {
+  pl: {
+    titleLang: "Polish language",
+    summaryLang: "Polish",
+    noEnglish:
+      "Do not use English in title unless it is an official proper noun.",
+  },
+  en: {
+    titleLang: "English language",
+    summaryLang: "English",
+    noEnglish: "",
+  },
+  be: {
+    titleLang: "Belarusian language transliterated to Latin alphabet",
+    summaryLang: "Belarusian",
+    noEnglish:
+      "Do not use English in title unless it is an official proper noun.",
+  },
+  ru: {
+    titleLang: "Russian language transliterated to Latin alphabet",
+    summaryLang: "Russian",
+    noEnglish:
+      "Do not use English in title unless it is an official proper noun.",
+  },
+};
+
+export async function suggestName({ llm, file, content, rules, lang = "pl" }) {
   const ext = path.extname(file.relativePath).toLowerCase();
+  const lp = LANG_PROMPTS[lang] || LANG_PROMPTS.pl;
   const prompt = [
     "You are a file naming assistant.",
     "Return ONLY strict JSON with keys: title,type,summary,date,person,confidence.",
-    "title must be in Polish language, lowercase snake_case, filesystem-safe words (without extension).",
+    `title must be in ${lp.titleLang}, lowercase snake_case, filesystem-safe words (without extension).`,
     "Use one consistent naming style for all files.",
-    "Do not use English in title unless it is an official proper noun.",
+    lp.noEnglish,
     "date format if known: YYYY or YYYY-MM or YYYY-MM-DD, else empty string.",
     "If the document contains a person surname/name (e.g. passport, ID, permit), set person as surname or surname_name in Latin letters and include it in title.",
-    "summary in Polish, concise.",
+    `summary in ${lp.summaryLang}, concise.`,
     "Do not invent facts. Use low confidence when uncertain.",
     "General naming rules:",
     rules || "Use semantic names by document meaning and type.",
     `Original path: ${file.relativePath}`,
     `Extension: ${ext}`,
     "Extracted content (possibly partial):",
-    content && content.trim().length > 0 ? content.slice(0, 8000) : "[NO_TEXT_EXTRACTED]",
-  ].join("\n");
+    content && content.trim().length > 0
+      ? content.slice(0, 8000)
+      : "[NO_TEXT_EXTRACTED]",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const res = await llm.invoke(prompt);
   const raw = responseToText(res?.content).trim();

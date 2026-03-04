@@ -25,6 +25,7 @@ export function parseArgs(argv) {
       "**/node_modules/**",
       "**/outputs/**",
     ],
+    lang: (process.env.NAMING_LANG || "pl").toLowerCase(),
     limit: 0,
     ignoreListPath: process.env.IGNORE_LIST_PATH || "",
     updateIgnoreList:
@@ -44,6 +45,8 @@ export function parseArgs(argv) {
     if (token === "--limit") args.limit = Number(argv[i + 1] || 0);
     if (token === "--ignore-list") args.ignoreListPath = argv[i + 1];
     if (token === "--no-update-ignore-list") args.updateIgnoreList = false;
+    if (token === "--lang")
+      args.lang = String(argv[i + 1] || "pl").toLowerCase();
     if (token === "--include") {
       const val = argv[i + 1] || "";
       // Прасэт (pdf, photos, docs, all) або кастомны glob

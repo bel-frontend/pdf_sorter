@@ -17,9 +17,14 @@ function makeCatalogAutoSection({ generatedAt, files }) {
     "",
   ];
 
-  const sorted = [...files].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  const sorted = [...files].sort((a, b) =>
+    a.relativePath.localeCompare(b.relativePath),
+  );
   for (const file of sorted) {
-    const encoded = file.relativePath.split("/").map(encodeURIComponent).join("/");
+    const encoded = file.relativePath
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
     lines.push(`- [${file.relativePath}](${encoded})`);
   }
   lines.push("");
@@ -70,13 +75,17 @@ async function cleanupLegacyOutputs(outDir) {
       );
     });
 
-  await Promise.all(legacy.map((name) => fs.rm(path.join(outDir, name), { force: true })));
+  await Promise.all(
+    legacy.map((name) => fs.rm(path.join(outDir, name), { force: true })),
+  );
 }
 
 async function cleanupTechnicalTempDirs(projectDir) {
   const names = ["tmp-apply-test", "tmp-person-test"];
   await Promise.all(
-    names.map((name) => fs.rm(path.join(projectDir, name), { recursive: true, force: true })),
+    names.map((name) =>
+      fs.rm(path.join(projectDir, name), { recursive: true, force: true }),
+    ),
   );
 }
 
@@ -100,7 +109,9 @@ async function main() {
   const ignoredPaths = await readIgnoreList(config.ignoreListPath);
   const files = await collectFiles({ ...config, ignoredPaths });
   if (files.length === 0) {
-    console.log("No files found by include patterns (after ignore list filtering).");
+    console.log(
+      "No files found by include patterns (after ignore list filtering).",
+    );
     return;
   }
 
@@ -110,10 +121,18 @@ async function main() {
   await cleanupTechnicalTempDirs(process.cwd());
 
   const pendingPath = path.join(outDir, "pending-files.txt");
-  await fs.writeFile(pendingPath, files.map((f) => f.relativePath).join("\n"), "utf8");
+  await fs.writeFile(
+    pendingPath,
+    files.map((f) => f.relativePath).join("\n"),
+    "utf8",
+  );
 
-  console.log(`Ignore list: ${config.ignoreListPath} (${ignoredPaths.size} entries)`);
-  console.log(`Found ${files.length} pending files. Provider=${config.provider}, model=${config.model}.`);
+  console.log(
+    `Ignore list: ${config.ignoreListPath} (${ignoredPaths.size} entries)`,
+  );
+  console.log(
+    `Found ${files.length} pending files. Provider=${config.provider}, model=${config.model}.`,
+  );
   console.log(`Pending list saved: ${pendingPath}`);
 
   const usedTargets = new Set();
@@ -123,7 +142,13 @@ async function main() {
   for (const file of files) {
     try {
       const content = await extractContent(file.absolutePath);
-      const suggestion = await suggestName({ llm, file, content, rules });
+      const suggestion = await suggestName({
+        llm,
+        file,
+        content,
+        rules,
+        lang: config.lang,
+      });
       const target = await resolveRenameTarget({
         targetDir: config.targetDir,
         relativePath: file.relativePath,
@@ -161,13 +186,23 @@ async function main() {
   }
 
   const planPath = path.join(outDir, "rename-plan.json");
-  await fs.writeFile(planPath, JSON.stringify({ config, pendingCount: files.length, rows, failures }, null, 2), "utf8");
+  await fs.writeFile(
+    planPath,
+    JSON.stringify(
+      { config, pendingCount: files.length, rows, failures },
+      null,
+      2,
+    ),
+    "utf8",
+  );
 
   const csvLines = [
     "from,to,changed,type,date,confidence,summary",
     ...rows.map((r) => {
-      const esc = (v) => `\"${String(v ?? "").replaceAll("\"", "\"\"")}\"`;
-      return [r.from, r.to, r.changed, r.type, r.date, r.confidence, r.summary].map(esc).join(",");
+      const esc = (v) => `\"${String(v ?? "").replaceAll('"', '""')}\"`;
+      return [r.from, r.to, r.changed, r.type, r.date, r.confidence, r.summary]
+        .map(esc)
+        .join(",");
     }),
   ];
   const csvPath = path.join(outDir, "rename-plan.csv");

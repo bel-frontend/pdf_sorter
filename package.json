@@ -7,6 +7,7 @@
     "apply:pdf": "npm --prefix tools/rename-agent run apply:pdf --",
     "apply:photos": "npm --prefix tools/rename-agent run apply:photos --",
     "apply:docs": "npm --prefix tools/rename-agent run apply:docs --",
-    "organize": "npm --prefix tools/rename-agent run organize --"
+    "organize": "npm --prefix tools/rename-agent run organize --",
+    "organize:smart": "npm --prefix tools/rename-agent run organize:smart --"
   }
 }
