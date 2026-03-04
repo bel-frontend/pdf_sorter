@@ -1,0 +1,13 @@
+Cel: generować sensowną nazwę pliku na podstawie jego treści.
+
+Zasady nazw:
+1) Język nazwy: polski, alfabet łaciński bez znaków diakrytycznych, snake_case.
+2) Format preferowany: <kategoria>_<temat>_<data>.
+3) Kategorie przykładowe: faktura, pit, vat, zus, wyciag_bankowy, pobyt, umowa, zaswiadczenie, pelnomocnictwo, wniosek, zdjecie, skan, raport.
+4) Jeśli data znana — YYYY-MM lub YYYY-MM-DD; w przeciwnym razie bez daty.
+5) Bez losowych hash/id, chyba że to oficjalny numer dokumentu.
+6) Nazwa powinna być krótka, jasna i unikalna w obrębie folderu.
+7) Nie zmieniaj rozszerzenia.
+8) Jeśli treść nieczytelna — użyj: skan_nieczytelny.
+
+Zwracaj JSON z polami: title,type,summary,date,confidence.

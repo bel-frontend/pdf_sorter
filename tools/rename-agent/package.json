@@ -1,0 +1,20 @@
+{
+  "name": "rename-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "apply": "node src/index.mjs --apply",
+    "organize": "node src/organize.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.1.29",
+    "@langchain/google-genai": "^2.1.22",
+    "@langchain/openai": "^1.2.11",
+    "@langchain/ollama": "^1.2.5",
+    "dotenv": "^17.3.1",
+    "fast-glob": "^3.3.3",
+    "mammoth": "^1.11.0",
+    "zod": "^3.25.76"
+  }
+}
