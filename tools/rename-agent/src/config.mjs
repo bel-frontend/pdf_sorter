@@ -3,20 +3,33 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
+const INCLUDE_PRESETS = {
+  all: "**/*.{pdf,jpg,jpeg,png,tiff,tif,bmp,webp,gif,doc,docx,xml}",
+  pdf: "**/*.pdf",
+  photos: "**/*.{jpg,jpeg,png,tiff,tif,bmp,webp,gif}",
+  docs: "**/*.{doc,docx,xml}",
+};
+
 export function parseArgs(argv) {
-  const defaultTargetDir = "/Users/serj/projects/poland/src";
+  const defaultTargetDir = process.env.TARGET_DIR || "";
   const args = {
-    targetDir: process.env.TARGET_DIR || defaultTargetDir,
+    targetDir: defaultTargetDir,
     dryRun: String(process.env.DRY_RUN || "true").toLowerCase() !== "false",
     provider: (process.env.LLM_PROVIDER || "openai").toLowerCase(),
     model: "",
     ollamaBaseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
-    include: ["**/*.{pdf,jpg,jpeg,png,tiff,tif,bmp,webp,gif,doc,docx,xml}"],
-    exclude: ["**/.git/**", "**/.venv/**", "**/node_modules/**", "**/outputs/**"],
+    include: [INCLUDE_PRESETS.all],
+    exclude: [
+      "**/.git/**",
+      "**/.venv/**",
+      "**/node_modules/**",
+      "**/outputs/**",
+    ],
     limit: 0,
     ignoreListPath: process.env.IGNORE_LIST_PATH || "",
     updateIgnoreList:
-      String(process.env.UPDATE_IGNORE_LIST || "true").toLowerCase() !== "false",
+      String(process.env.UPDATE_IGNORE_LIST || "true").toLowerCase() !==
+      "false",
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -24,12 +37,22 @@ export function parseArgs(argv) {
     if (token === "--apply") args.dryRun = false;
     if (token === "--dry-run") args.dryRun = true;
     if (token === "--target-dir") args.targetDir = argv[i + 1];
-    if (token === "--provider") args.provider = String(argv[i + 1] || "").toLowerCase();
+    if (token === "--provider")
+      args.provider = String(argv[i + 1] || "").toLowerCase();
     if (token === "--model") args.model = argv[i + 1];
     if (token === "--ollama-base-url") args.ollamaBaseUrl = argv[i + 1];
     if (token === "--limit") args.limit = Number(argv[i + 1] || 0);
     if (token === "--ignore-list") args.ignoreListPath = argv[i + 1];
     if (token === "--no-update-ignore-list") args.updateIgnoreList = false;
+    if (token === "--include") {
+      const val = argv[i + 1] || "";
+      // Прасэт (pdf, photos, docs, all) або кастомны glob
+      const parts = val
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      args.include = parts.map((p) => INCLUDE_PRESETS[p] || p);
+    }
   }
 
   if (!args.ignoreListPath) {
@@ -39,7 +62,9 @@ export function parseArgs(argv) {
   }
 
   if (!["openai", "ollama", "google", "auto"].includes(args.provider)) {
-    throw new Error(`Unsupported provider: ${args.provider}. Use openai, ollama, google or auto.`);
+    throw new Error(
+      `Unsupported provider: ${args.provider}. Use openai, ollama, google or auto.`,
+    );
   }
 
   if (args.provider === "ollama" && !process.env.OLLAMA_MODEL && !args.model) {

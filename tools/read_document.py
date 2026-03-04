@@ -81,8 +81,12 @@ def ocr_image(image_path: str, lang: str = "pol+eng+rus") -> str:
     return text.strip()
 
 
-def ocr_pdf(pdf_path: str, lang: str = "pol+eng+rus", dpi: int = 300,
-            pages: list[int] | None = None) -> str:
+def ocr_pdf(
+    pdf_path: str,
+    lang: str = "pol+eng+rus",
+    dpi: int = 300,
+    pages: list[int] | None = None,
+) -> str:
     """Распазнаць тэкст у адсканаваным PDF праз OCR."""
     import pytesseract
     from pdf2image import convert_from_path
@@ -109,18 +113,37 @@ def ocr_pdf(pdf_path: str, lang: str = "pol+eng+rus", dpi: int = 300,
 
 
 def has_meaningful_text(pdf_path: str, sample_pages: int = 3) -> bool:
-    """Праверыць, ці ёсць у PDF рэальны тэкст (не сканы)."""
+    """Праверыць, ці ёсць у PDF рэальны тэкст (не сканы).
+
+    Сканы форм могуць утрымліваць асобныя лічбы/літары з палёў,
+    таму правяраем не толькі колькасць сімвалаў, але і наяўнасць
+    рэальных слоў (даўжэй за 3 сімвалы).
+    """
     try:
+        import re
+
         import fitz
+
         doc = fitz.open(pdf_path)
         total = min(len(doc), sample_pages)
-        char_count = 0
+        total_words = 0
+        total_short_lines = 0
+        total_lines = 0
         for i in range(total):
             text = doc[i].get_text()
-            char_count += len(text.strip())
+            words = re.findall(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻа-яА-ЯёЁіІўЎ]{4,}", text)
+            total_words += len(words)
+            lines = [ln for ln in text.split("\n") if ln.strip()]
+            total_lines += len(lines)
+            # Радкі з 1-2 сімвалаў — тыповы прызнак скана з OCR-лэерам
+            total_short_lines += sum(1 for ln in lines if len(ln.strip()) <= 2)
         doc.close()
-        # Калі менш за 50 сімвалаў на старонку — верагодна скан
-        return (char_count / max(total, 1)) > 50
+
+        words_per_page = total_words / max(total, 1)
+        # Калі больш за 40% радкоў — аднасімвальныя, гэта скан з OCR-лэерам
+        if total_lines > 0 and total_short_lines / total_lines > 0.4:
+            return False
+        return words_per_page >= 10
     except Exception:
         return False
 
@@ -154,8 +177,13 @@ def parse_pages(pages_str: str) -> list[int]:
     return sorted(set(pages))
 
 
-def process_file(file_path: str, mode: str = "auto", lang: str = "pol+eng+rus",
-                 pages: list[int] | None = None, dpi: int = 300) -> str:
+def process_file(
+    file_path: str,
+    mode: str = "auto",
+    lang: str = "pol+eng+rus",
+    pages: list[int] | None = None,
+    dpi: int = 300,
+) -> str:
     """Апрацаваць файл і вярнуць тэкст."""
     file_path = os.path.abspath(file_path)
 
@@ -204,16 +232,25 @@ def main():
         epilog=__doc__,
     )
     parser.add_argument("file", help="Шлях да файла (PDF, JPG, PNG, ...)")
-    parser.add_argument("--mode", choices=["text", "ocr", "auto"], default="auto",
-                        help="Рэжым: text (тэкст з PDF), ocr (распазнаванне), auto (аўта)")
-    parser.add_argument("--lang", default="pol+eng+rus",
-                        help="Мовы OCR (па змаўчанні: pol+eng+rus)")
-    parser.add_argument("--pages", default=None,
-                        help="Дыяпазон старонак, напр. 1-3,5,7-9")
-    parser.add_argument("--dpi", type=int, default=300,
-                        help="DPI для рэндэрынгу PDF (па змаўчанні: 300)")
-    parser.add_argument("--output", "-o", default=None,
-                        help="Захаваць вынік у файл")
+    parser.add_argument(
+        "--mode",
+        choices=["text", "ocr", "auto"],
+        default="auto",
+        help="Рэжым: text (тэкст з PDF), ocr (распазнаванне), auto (аўта)",
+    )
+    parser.add_argument(
+        "--lang", default="pol+eng+rus", help="Мовы OCR (па змаўчанні: pol+eng+rus)"
+    )
+    parser.add_argument(
+        "--pages", default=None, help="Дыяпазон старонак, напр. 1-3,5,7-9"
+    )
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=300,
+        help="DPI для рэндэрынгу PDF (па змаўчанні: 300)",
+    )
+    parser.add_argument("--output", "-o", default=None, help="Захаваць вынік у файл")
 
     args = parser.parse_args()
 

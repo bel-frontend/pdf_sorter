@@ -1,0 +1,12 @@
+{
+  "name": "file-rename",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "apply": "npm --prefix tools/rename-agent run apply --",
+    "apply:pdf": "npm --prefix tools/rename-agent run apply:pdf --",
+    "apply:photos": "npm --prefix tools/rename-agent run apply:photos --",
+    "apply:docs": "npm --prefix tools/rename-agent run apply:docs --",
+    "organize": "npm --prefix tools/rename-agent run organize --"
+  }
+}

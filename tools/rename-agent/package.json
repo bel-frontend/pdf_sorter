@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "apply": "node src/index.mjs --apply",
+    "apply:pdf": "node src/index.mjs --apply --include pdf",
+    "apply:photos": "node src/index.mjs --apply --include photos",
+    "apply:docs": "node src/index.mjs --apply --include docs",
     "organize": "node src/organize.mjs"
   },
   "dependencies": {

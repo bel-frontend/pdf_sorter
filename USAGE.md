@@ -53,31 +53,29 @@ brew install tesseract-lang
 
 ## Устаноўка і разгортванне
 
-### Хуткі старт (2 каманды)
+### Хуткі старт (3 крокі)
 
 ```bash
-git clone <url-рэпазіторыя> file_rename
+git clone <url-рэпазіторыя>
 cd file_rename
 ./setup.sh
 ```
 
 Скрыпт `setup.sh` аўтаматычна:
 1. Стварае Python venv і ўсталёўвае ўсе pip-залежнасці
-2. Усталёўвае Node.js-залежнасці (`npm install`)
+2. Усталёўвае Node.js-залежнасці
 3. Стварае `.env` з шаблону і прапісвае правільны `READER_PYTHON`
 
-Пасля гэтага дадайце API-ключ у `tools/rename-agent/.env`:
+Пасля гэтага дадайце API-ключ:
 
 ```bash
-# Адкрыйце .env і ўпішыце свой ключ:
 nano tools/rename-agent/.env
 ```
 
 Гатова. Можна запускаць:
 
 ```bash
-cd tools/rename-agent
-npm run apply -- --dry-run --target-dir /шлях/да/вашых/дакументаў
+npm run apply -- --dry-run --target-dir ~/Desktop/documents
 ```
 
 ### Ручная ўстаноўка (пакрокава)
@@ -87,11 +85,9 @@ npm run apply -- --dry-run --target-dir /шлях/да/вашых/дакумен
 **1. Кланаванне:**
 
 ```bash
-git clone <url-рэпазіторыя> file_rename
+git clone <url-рэпазіторыя>
 cd file_rename
 ```
-
-Далей у дакументацыі `<PROJECT_ROOT>` = каранёвая папка праекта (дзе вы зрабілі `cd file_rename`).
 
 **2. Python venv (для OCR):**
 
@@ -107,29 +103,22 @@ python3 -m venv .venv
 ```bash
 cd tools/rename-agent
 npm install
+cd ../..
 ```
 
 **4. Канфігурацыя:**
 
 ```bash
-cp .env.example .env
+cp tools/rename-agent/.env.example tools/rename-agent/.env
 ```
 
-Адрэдагуйце `.env` — дадайце API-ключ і пропішыце шлях да Python з venv:
-
-```env
-READER_PYTHON=<PROJECT_ROOT>/.venv/bin/python
-```
+Адрэдагуйце `.env` — дадайце API-ключ і пропішыце абсалютны шлях да Python з venv у `READER_PYTHON`.
 
 **5. Праверка:**
 
 ```bash
-# З кораня праекта:
 .venv/bin/python tools/read_document.py --help
-
-# Тэставы запуск агента:
-cd tools/rename-agent
-npm run apply -- --dry-run --limit 1 --target-dir /шлях/да/тэставай/папкі
+npm run apply -- --dry-run --limit 1 --target-dir ~/Desktop
 ```
 
 ---
@@ -155,36 +144,32 @@ GOOGLE_GEMINI_API_KEY=...
 GOOGLE_MODEL=gemini-2.5-pro
 
 # --- Агульныя налады ---
-TARGET_DIR=/шлях/да/вашых/дакументаў
+TARGET_DIR=                   # пуста = абавязкова перадаваць --target-dir
 DRY_RUN=true                 # true = толькі прагляд, false = рэальнае перайменаванне
 IGNORE_LIST_PATH=             # пуста = аўтаматычна ў TARGET_DIR
 UPDATE_IGNORE_LIST=true
 
 # --- OCR ---
-READER_PYTHON=<PROJECT_ROOT>/.venv/bin/python
+READER_PYTHON=               # setup.sh запоўніць аўтаматычна
 OCR_LANG=pol+eng+rus          # мовы Tesseract
 ```
 
-**Важна:** замяніце `<PROJECT_ROOT>` на рэальны абсалютны шлях да кораня праекта.
-
-**Важна:** `DRY_RUN=true` па змаўчанні — агент не будзе перайменоўваць файлы, пакуль вы яўна не перадасце `--apply`.
+`setup.sh` аўтаматычна прапісвае `READER_PYTHON` пры стварэнні `.env`. Калі ўсталёўвалі ўручную — пропішыце абсалютны шлях да `.venv/bin/python` у вашым праекце.
 
 ---
 
 ## Запуск перайменавання
 
-Усе каманды `npm run ...` запускаюцца з папкі `tools/rename-agent`.
+Усе каманды запускаюцца з кораня праекта.
 
 ### Базавая каманда
 
 ```bash
-cd tools/rename-agent
-
 # Прагляд — што будзе перайменавана (без зменаў)
-npm run apply -- --dry-run --target-dir /шлях/да/папкі
+npm run apply -- --dry-run --target-dir ~/Desktop/documents
 
 # Рэальнае перайменаванне
-npm run apply -- --target-dir /шлях/да/папкі
+npm run apply -- --target-dir ~/Desktop/documents
 ```
 
 Нагадванне: `npm run apply` ужо ўключае сцяг `--apply`, таму файлы будуць перайменаваны. Дадайце `--dry-run`, каб толькі пабачыць план.
@@ -193,65 +178,80 @@ npm run apply -- --target-dir /шлях/да/папкі
 
 ```bash
 # OpenAI (па змаўчанні)
-npm run apply -- --target-dir ./docs --provider openai --model gpt-4.1-mini
+npm run apply -- --target-dir ~/docs --provider openai --model gpt-4.1-mini
 
 # Google Gemini
-npm run apply -- --target-dir ./docs --provider google --model gemini-2.5-pro
+npm run apply -- --target-dir ~/docs --provider google --model gemini-2.5-pro
 
 # Лакальная мадэль Ollama (без інтэрнэту)
-npm run apply -- --target-dir ./docs --provider ollama --model gpt-oss:20b
+npm run apply -- --target-dir ~/docs --provider ollama --model gpt-oss:20b
 ```
 
 ### Абмежаванне колькасці файлаў
 
 ```bash
 # Апрацаваць толькі першыя 10 файлаў (добра для тэсту)
-npm run apply -- --target-dir ./docs --limit 10
+npm run apply -- --target-dir ~/docs --limit 10
 ```
+
+### Фільтрацыя па тыпе файлаў
+
+Хуткія каманды для пэўных тыпаў:
+
+```bash
+# Толькі PDF
+npm run apply:pdf -- --target-dir ~/docs
+
+# Толькі фатаграфіі (jpg, png, tiff, bmp, webp, gif)
+npm run apply:photos -- --target-dir ~/docs
+
+# Толькі дакументы Word/XML (doc, docx, xml)
+npm run apply:docs -- --target-dir ~/docs
+```
+
+Або праз параметр `--include` з прасэтам ці кастомным glob:
+
+```bash
+# Прасэт
+npm run apply -- --target-dir ~/docs --include pdf
+npm run apply -- --target-dir ~/docs --include photos
+
+# Некалькі прасэтаў разам
+npm run apply -- --target-dir ~/docs --include pdf,photos
+
+# Кастомны glob
+npm run apply -- --target-dir ~/docs --include "**/*.{pdf,png}"
+```
+
+Даступныя прасэты:
+
+| Прасэт | Фарматы |
+|---|---|
+| `all` | pdf, jpg, jpeg, png, tiff, tif, bmp, webp, gif, doc, docx, xml (па змаўчанні) |
+| `pdf` | pdf |
+| `photos` | jpg, jpeg, png, tiff, tif, bmp, webp, gif |
+| `docs` | doc, docx, xml |
 
 ---
 
 ## Запуск з рознымі папкамі
 
-Ёсць некалькі спосабаў запускаць агент для розных папак з дакументамі.
+### Параметр `--target-dir`
 
-### Спосаб 1: Параметр `--target-dir`
-
-Самы просты — перадаць шлях да папкі як аргумент:
+Перадайце шлях да любой папкі:
 
 ```bash
-cd tools/rename-agent
-
-# Любая папка на дыску
-npm run apply -- --target-dir /шлях/да/маіх/дакументаў
-
-# Папка на працоўным стале
 npm run apply -- --target-dir ~/Desktop/scans
-
-# Папка на знешнім дыску
+npm run apply -- --target-dir ~/Documents/invoices
 npm run apply -- --target-dir /Volumes/USB/documents
 ```
 
-### Спосаб 2: `npm --prefix` (запуск з любога месца)
-
-Не хочаце кожны раз рабіць `cd`? Выкарыстоўвайце `--prefix`:
-
-```bash
-# З любога месца ў сістэме:
-npm --prefix <PROJECT_ROOT>/tools/rename-agent \
-    run apply -- --target-dir ~/Desktop/scans
-
-# Dry-run для іншай папкі:
-npm --prefix <PROJECT_ROOT>/tools/rename-agent \
-    run apply -- --dry-run --target-dir /Volumes/USB/documents
-```
-
-### Спосаб 3: Змяненне `TARGET_DIR` у `.env`
+### Змяненне `TARGET_DIR` у `.env`
 
 Адрэдагуйце `tools/rename-agent/.env`:
 
 ```env
-TARGET_DIR=/шлях/да/маіх/дакументаў
+TARGET_DIR=~/Documents/my-docs
 ```
 
 Тады дастаткова проста:
@@ -260,19 +260,19 @@ TARGET_DIR=/шлях/да/маіх/дакументаў
 npm run apply
 ```
 
-### Спосаб 4: Shell-аліас (для частага выкарыстання)
+### Shell-аліас (для частага выкарыстання)
 
 Дадайце ў `~/.zshrc` або `~/.bashrc`:
 
 ```bash
-alias rename-docs='npm --prefix <PROJECT_ROOT>/tools/rename-agent run apply --'
+alias rename-docs='npm --prefix /шлях/да/праекта/tools/rename-agent run apply --'
 ```
 
-Пасля гэтага:
+Пасля гэтага з любой папкі:
 
 ```bash
 rename-docs --target-dir ~/Desktop/scans
-rename-docs --target-dir /tmp/test --dry-run --limit 5
+rename-docs --target-dir ~/docs --dry-run --limit 5
 ```
 
 ---
@@ -299,23 +299,17 @@ rename-docs --target-dir /tmp/test --dry-run --limit 5
 ### Каманды
 
 ```bash
-cd tools/rename-agent
-
 # Прагляд плана сартыроўкі (без перамяшчэння)
-npm run organize -- --target-dir /шлях/да/папкі --dry-run
+npm run organize -- --target-dir ~/Desktop/documents --dry-run
 
 # Выканаць сартыроўку
-npm run organize -- --target-dir /шлях/да/папкі --apply
-
-# З іншага месца
-npm --prefix <PROJECT_ROOT>/tools/rename-agent \
-    run organize -- --target-dir ~/Desktop/scans --apply
+npm run organize -- --target-dir ~/Desktop/documents --apply
 
 # Задаць іншую назву выходной папкі
-npm run organize -- --target-dir ./docs --apply --out-dir sorted_documents
+npm run organize -- --target-dir ~/docs --apply --out-dir sorted_documents
 
 # Абмежаваць колькасць файлаў
-npm run organize -- --target-dir ./docs --dry-run --limit 50
+npm run organize -- --target-dir ~/docs --dry-run --limit 50
 ```
 
 Вынік — структура тыпу:
@@ -342,9 +336,6 @@ dokumenty_posortowane/
 
 ### Запуск
 
-Усе каманды запускаюцца з кораня праекта.
-Выкарыстоўвайце `.venv/bin/python` напрамую — актывацыя venv не патрэбна.
-
 ```bash
 # Прачытаць PDF з тэкстам
 .venv/bin/python tools/read_document.py document.pdf
@@ -365,7 +356,7 @@ dokumenty_posortowane/
 .venv/bin/python tools/read_document.py scan.pdf --output result.txt
 ```
 
-Альтэрнатыўна можна выкарыстоўваць абалонку `tools/read_doc.sh`, якая аўтаматычна знаходзіць venv:
+Альтэрнатыўна — абалонка `tools/read_doc.sh`, якая сама знаходзіць venv:
 
 ```bash
 ./tools/read_doc.sh document.pdf
@@ -393,11 +384,12 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | Параметр | Апісанне | Змаўчанне |
 |---|---|---|
 | `--target-dir <шлях>` | Папка з файламі для апрацоўкі | з `.env` |
-| `--dry-run` | Толькі прагляд, без перайменавання | `true` (пры `npm run apply` — `false`) |
+| `--dry-run` | Толькі прагляд, без перайменавання | |
 | `--apply` | Выканаць перайменаванне | |
 | `--provider <назва>` | LLM-правайдар: `openai`, `ollama`, `google`, `auto` | `openai` |
 | `--model <назва>` | Мадэль LLM | `gpt-4.1-mini` |
 | `--ollama-base-url <url>` | URL сервера Ollama | `http://localhost:11434` |
+| `--include <прасэт\|glob>` | Фільтр тыпаў файлаў: `pdf`, `photos`, `docs`, `all` або glob | `all` |
 | `--limit <N>` | Апрацаваць толькі першыя N файлаў | `0` (усе) |
 | `--ignore-list <шлях>` | Шлях да ignore-ліста | `<TARGET_DIR>/.rename-agent-ignore.txt` |
 | `--no-update-ignore-list` | Не абнаўляць ignore-ліст | абнаўляць |
@@ -497,7 +489,6 @@ npm run apply -- --target-dir ~/docs --no-update-ignore-list
 Спачатку заўсёды глядзім, што агент прапануе:
 
 ```bash
-cd tools/rename-agent
 npm run apply -- --dry-run --target-dir ~/Desktop/documents
 ```
 
@@ -541,14 +532,12 @@ npm run organize -- --target-dir ~/Desktop/my-docs --apply
 ### Прыклад 6: Апрацоўка знешняга дыска
 
 ```bash
-npm --prefix <PROJECT_ROOT>/tools/rename-agent \
-    run apply -- --target-dir /Volumes/MyUSB/scans --provider openai --model gpt-4.1-mini
+npm run apply -- --target-dir /Volumes/MyUSB/scans --provider openai --model gpt-4.1-mini
 ```
 
 ### Прыклад 7: Прачытаць адзін дакумент уручную
 
 ```bash
-# З кораня праекта:
 .venv/bin/python tools/read_document.py ~/Desktop/scan.pdf
 
 # Або праз абалонку (яна сама знойдзе venv):
@@ -596,17 +585,11 @@ OCR не змог распазнаць тэкст. Магчымыя прычын
 
 Агент шукае Python у наступным парадку:
 
-1. `READER_PYTHON` з `.env` (рэкамендуецца: абсалютны шлях да `.venv/bin/python`)
+1. `READER_PYTHON` з `.env` (`setup.sh` прапісвае аўтаматычна)
 2. `.venv/bin/python` у корані праекта (знаходзіць аўтаматычна)
 3. сістэмны `python3` (фолбэк, можа не мець патрэбных бібліятэк)
 
-Каб гарантаваць працу, пропішыце ў `.env`:
-
-```env
-READER_PYTHON=<PROJECT_ROOT>/.venv/bin/python
-```
-
-Праверыць, што venv працуе (з кораня праекта):
+Праверыць, што venv працуе:
 
 ```bash
 .venv/bin/python -c "import pdfplumber, pytesseract, fitz; print('OK')"
