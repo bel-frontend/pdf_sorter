@@ -431,7 +431,12 @@ async function main() {
   const operations = [];
   const reservedDestinations = new Set();
 
-  for (const item of selected) {
+  const totalSelected = selected.length;
+  for (const [index, item] of selected.entries()) {
+    const processed = index + 1;
+    const remaining = totalSelected - processed;
+    const progress = `[${processed}/${totalSelected}, left=${remaining}]`;
+
     let category;
     if (args.smart) {
       try {
@@ -441,10 +446,10 @@ async function main() {
           absPath: item.absPath,
           relativePath: item.relPath,
         });
-        console.log(`Classified: ${item.relPath} -> ${category}`);
+        console.log(`${progress} Classified: ${item.relPath} -> ${category}`);
       } catch (err) {
         console.error(
-          `Smart classify failed for ${item.relPath}: ${err.message}`,
+          `${progress} Smart classify failed for ${item.relPath}: ${err.message}`,
         );
         category = detectCategory(item.relPath);
       }
@@ -475,9 +480,14 @@ async function main() {
   const toMove = operations.filter((o) => o.action === "move");
 
   if (!args.dryRun) {
-    for (const op of toMove) {
+    const totalToMove = toMove.length;
+    for (const [index, op] of toMove.entries()) {
+      const processed = index + 1;
+      const remaining = totalToMove - processed;
+      const progress = `[${processed}/${totalToMove}, left=${remaining}]`;
       await fs.mkdir(path.dirname(op.toAbs), { recursive: true });
       await fs.rename(op.fromAbs, op.toAbs);
+      console.log(`${progress} Moved: ${op.from} -> ${op.to}`);
     }
   }
 

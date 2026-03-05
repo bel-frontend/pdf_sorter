@@ -137,7 +137,12 @@ async function main() {
   const rows = [];
   const failures = [];
 
-  for (const file of files) {
+  const totalFiles = files.length;
+  for (const [index, file] of files.entries()) {
+    const processed = index + 1;
+    const remaining = totalFiles - processed;
+    const progress = `[${processed}/${totalFiles}, left=${remaining}]`;
+
     try {
       const content = await extractContent(file.absolutePath);
       const suggestion = await suggestName({
@@ -163,7 +168,7 @@ async function main() {
       };
       rows.push(row);
 
-      console.log(`Analyzed: ${file.relativePath} -> ${target.to}`);
+      console.log(`${progress} Analyzed: ${file.relativePath} -> ${target.to}`);
 
       if (!config.dryRun) {
         await applyRenameRow({ targetDir: config.targetDir, row });
@@ -179,7 +184,7 @@ async function main() {
         file: file.relativePath,
         error: message,
       });
-      console.error(`Failed: ${file.relativePath} -> ${message}`);
+      console.error(`${progress} Failed: ${file.relativePath} -> ${message}`);
     }
   }
 
