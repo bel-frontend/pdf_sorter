@@ -1,4 +1,4 @@
-[English version](USAGE.md)
+[English version](README.md)
 
 # File Rename Agent -- Dakumentacyja
 
@@ -71,7 +71,7 @@ cd file_rename
 Пасля гэтага дадайце API-ключ:
 
 ```bash
-nano tools/rename-agent/.env
+nano .env
 ```
 
 Гатова. Можна запускаць:
@@ -103,15 +103,13 @@ python3 -m venv .venv
 **3. Node.js-залежнасці:**
 
 ```bash
-cd tools/rename-agent
-npm install
-cd ../..
+npm --prefix tools/rename-agent install
 ```
 
 **4. Канфігурацыя:**
 
 ```bash
-cp tools/rename-agent/.env.example tools/rename-agent/.env
+cp .env.example .env
 ```
 
 Адрэдагуйце `.env` -- дадайце API-ключ і пропішыце абсалютны шлях да Python з venv у `READER_PYTHON`.
@@ -127,15 +125,17 @@ npm run apply -- --dry-run --limit 1 --target-dir ~/Desktop
 
 ## Канфігурацыя (.env)
 
-Файл: `tools/rename-agent/.env`
+Файл: `.env` (корань праекта)
 
 ```env
-# --- Правайдар LLM ---
-LLM_PROVIDER=openai          # openai | ollama | google | auto
+# --- Выбар мадэлі ---
+LLM_MODEL=gpt-4o-mini        # опцыянальны агульны default
 
 # --- OpenAI ---
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4.1-mini    # або gpt-5-mini, gpt-4o і інш.
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_MS=90000
+OPENAI_MAX_RETRIES=2
 
 # --- Ollama (лакальная мадэль) ---
 OLLAMA_BASE_URL=http://localhost:11434
@@ -179,17 +179,17 @@ npm run apply -- --target-dir ~/Desktop/documents
 
 Нагадванне: `npm run apply` ужо ўключае сцяг `--apply`, таму файлы будуць перайменаваны. Дадайце `--dry-run`, каб толькі пабачыць план.
 
-### Выбар LLM-правайдара
+### Выбар мадэлі
 
 ```bash
-# OpenAI (па змаўчанні)
-npm run apply -- --target-dir ~/docs --provider openai --model gpt-4.1-mini
+# OpenAI
+npm run apply -- --target-dir ~/docs --model gpt-4o-mini
 
 # Google Gemini
-npm run apply -- --target-dir ~/docs --provider google --model gemini-2.5-pro
+npm run apply -- --target-dir ~/docs --model gemini-2.5-pro
 
 # Лакальная мадэль Ollama (без інтэрнэту)
-npm run apply -- --target-dir ~/docs --provider ollama --model gpt-oss:20b
+npm run apply -- --target-dir ~/docs --model gpt-oss:20b
 ```
 
 ### Мова назваў
@@ -277,7 +277,7 @@ npm run apply -- --target-dir /Volumes/USB/documents
 
 ### Змяненне `TARGET_DIR` у `.env`
 
-Адрэдагуйце `tools/rename-agent/.env`:
+Адрэдагуйце `.env`:
 
 ```env
 TARGET_DIR=~/Documents/my-docs
@@ -357,8 +357,8 @@ npm run organize:smart -- --target-dir ~/Desktop/documents --dry-run
 # Выканаць сартыроўку
 npm run organize:smart -- --target-dir ~/Desktop/documents --apply
 
-# З выбарам правайдара
-npm run organize:smart -- --target-dir ~/docs --apply --provider openai --model gpt-4.1-mini
+# З выбарам мадэлі
+npm run organize:smart -- --target-dir ~/docs --apply --model gpt-4o-mini
 ```
 
 ### Дадатковыя параметры organize
@@ -445,8 +445,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--target-dir <шлях>` | Папка з файламі для апрацоўкі | з `.env` |
 | `--dry-run` | Толькі прагляд, без перайменавання | |
 | `--apply` | Выканаць перайменаванне | |
-| `--provider <назва>` | LLM-правайдар: `openai`, `ollama`, `google`, `auto` | `openai` |
-| `--model <назва>` | Мадэль LLM | `gpt-4.1-mini` |
+| `--model <назва>` | Мадэль LLM з whitelist | `LLM_MODEL`/`OPENAI_MODEL`/`OLLAMA_MODEL`/`GOOGLE_MODEL`/`gpt-4o-mini` |
 | `--ollama-base-url <url>` | URL сервера Ollama | `http://localhost:11434` |
 | `--include <прасэт\|glob>` | Фільтр тыпаў файлаў: `pdf`, `photos`, `docs`, `all` або glob | `all` |
 | `--lang <код>` | Мова назваў: `en`, `pl`, `be`, `ru` | `en` |
@@ -463,8 +462,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--apply` | Выканаць перамяшчэнне | |
 | `--out-dir <назва>` | Назва папкі для сартыроўкі | `sorted_documents` |
 | `--smart` | Разумная сартыроўка: аналіз кантэнту праз LLM | выключана |
-| `--provider <назва>` | LLM-правайдар (для `--smart`) | `openai` |
-| `--model <назва>` | Мадэль LLM (для `--smart`) | `gpt-4.1-mini` |
+| `--model <назва>` | Мадэль LLM (для `--smart`) | тыя ж default, што і для `apply` |
 | `--limit <N>` | Абмежаваць колькасць файлаў | `0` (усе) |
 
 ### `.venv/bin/python tools/read_document.py` (чытанне)
@@ -576,7 +574,7 @@ npm run apply -- --target-dir ~/Desktop/documents --limit 5 --dry-run
 ollama serve
 
 # Потым:
-npm run apply -- --target-dir ~/docs --provider ollama --model llama3.3
+npm run apply -- --target-dir ~/docs --model llama3.3:latest
 ```
 
 ### Прыклад 5: Поўны цыкл -- перайменаванне + сартыроўка
@@ -595,7 +593,7 @@ npm run organize -- --target-dir ~/Desktop/my-docs --apply
 ### Прыклад 6: Апрацоўка знешняга дыска
 
 ```bash
-npm run apply -- --target-dir /Volumes/MyUSB/scans --provider openai --model gpt-4.1-mini
+npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini
 ```
 
 ### Прыклад 7: Прачытаць адзін дакумент уручную
@@ -638,11 +636,12 @@ OCR не змог распазнаць тэкст. Магчымыя прычын
 - Файлы маюць падтрымліваемае пашырэнне (pdf, jpg, png, tiff, doc, docx, xml)
 - Файлы не ў `.rename-agent-ignore.txt`
 
-### Памылка правайдара LLM
+### Памылка LLM/мадэлі
 
 - **OpenAI**: праверце `OPENAI_API_KEY` у `.env`
 - **Ollama**: пераканайцеся, што `ollama serve` запушчаны
 - **Google**: праверце `GOOGLE_GEMINI_API_KEY`
+- **Unsupported model**: выкарыстоўвайце толькі мадэлі са спісу `Model` у `tools/rename-agent/src/llm.mjs`
 
 ### Python не знойдзены
 

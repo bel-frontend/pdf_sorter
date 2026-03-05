@@ -1,135 +1,142 @@
 # Rename Agent (Node.js + LangChain)
 
-Агент чытае кантэнт файлаў і прапануе/прымяняе новыя асэнсаваныя назвы.
+Агент для:
+- асэнсаванага перайменавання файлаў (`apply`),
+- сартыроўкі па катэгорыях (`organize` / `organize:smart`).
 
-## Tryb pracy (krok po kroku)
+## Падтрымліваемыя мадэлі
 
-- Przy starcie agent tworzy listę `pending` plików, których nie ma w ignore-liście.
-- Dalej przetwarza **plik po pliku**: analiza → propozycja nazwy → rename (w `apply`) → dopisanie do ignore-listy.
-- Dzięki temu po awarii można wznowić proces bez ponownego skanowania już przetworzonych plików.
-- Jeśli w treści dokumentu występuje osoba (np. paszport/dowód), agent dodaje nazwisko (i jeśli możliwe datę) do nazwy pliku.
-- Nazwy są dodatkowo normalizowane: usuwanie duplikatów tokenów i limit długości, żeby nie tworzyć zbyt długich nazw.
+Мадэль выбіраецца толькі па імені (`--model` або `.env`).
+Калі мадэль не ў whitelist, агент спыняецца з памылкай `Unsupported model`.
 
-## Падтрымка мадэляў
+OpenAI:
+- `gpt-4o`
+- `gpt-4o-mini`
+- `gpt-4.1-2025-04-14`
+- `gpt-4.1-nano`
+- `gpt-5`
+- `gpt-5.1`
+- `gpt-5-mini`
+- `gpt-5-nano`
 
-- `openai` (праз `@langchain/openai`)
-- `ollama` (праз `@langchain/ollama`)
-- `google` (праз `@langchain/google-genai`)
+Google:
+- `gemini-2.5-pro`
+
+Ollama:
+- `llama3.2`
+- `mistral-small3.1`
+- `llama3.3:latest`
+- `gemma3:12b`
+- `gpt-oss:20b`
 
 ## Устаноўка
 
+Каманды ніжэй выконвай з кораня праекта `file_rename`.
+
 ```bash
-cd tools/rename-agent
-npm install
+npm --prefix tools/rename-agent install
 cp .env.example .env
 ```
 
-Важна: каманды `npm run ...` трэба запускаць з папкі `tools/rename-agent`.
-Калі запускаеш з іншага месца, выкарыстоўвай `npm --prefix /Users/serj/projects/poland/tools/rename-agent ...`.
-
-## Канфіг `.env`
+## Канфіг `.env` (у корані праекта)
 
 ```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5-mini
+# Default model (priority: LLM_MODEL -> OPENAI_MODEL -> OLLAMA_MODEL -> GOOGLE_MODEL)
+LLM_MODEL=gpt-4o-mini
 
-# або
-LLM_PROVIDER=ollama
+# OpenAI
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_MS=90000
+OPENAI_MAX_RETRIES=2
+
+# Ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=gpt-oss:20b
 
-# або
-LLM_PROVIDER=google
-GOOGLE_GEMINI_API_KEY=...
+# Google
+GOOGLE_GEMINI_API_KEY=
 GOOGLE_MODEL=gemini-2.5-pro
+
+# Runtime
+TARGET_DIR=
+DRY_RUN=true
+IGNORE_LIST_PATH=
+UPDATE_IGNORE_LIST=true
+NAMING_LANG=en
+
+# OCR
+READER_PYTHON=python3
+OCR_LANG=pol+eng+rus
+
+# Smart organize vision model (optional)
+VISION_MODEL=gpt-4o
 ```
 
-## Запуск
+## Скрыпты
 
-Па змаўчанні (калі не перадаваць `--target-dir`) агент бярэ файлы з:
-`/Users/serj/projects/poland/src`
+- `npm run apply` — перайменаванне (з `--apply` па змаўчанні)
+- `npm run apply:pdf` — толькі pdf
+- `npm run apply:photos` — толькі выявы
+- `npm run apply:docs` — толькі doc/docx/xml
+- `npm run organize` — сартыроўка па ключавых словах
+- `npm run organize:smart` — LLM-класіфікацыя (тэкст + vision)
 
-### Прымяніць перайменаванне (асноўная каманда)
+## Флагі: `apply`
+
+| Флаг | Апісанне | Па змаўчанні |
+|---|---|---|
+| `--target-dir <path>` | Каранёвая папка для сканавання | `TARGET_DIR` з `.env` |
+| `--apply` | Рэальныя змены (не dry-run) | `false` (акрамя `npm run apply`) |
+| `--dry-run` | Толькі план, без перайменавання | `true` |
+| `--model <name>` | Мадэль са спісу вышэй | `LLM_MODEL`/`OPENAI_MODEL`/... |
+| `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
+| `--limit <n>` | Апрацаваць толькі першыя `n` файлаў | `0` (без ліміту) |
+| `--include <preset|glob>` | Фільтр файлаў (`all,pdf,photos,docs` або glob) | `all` |
+| `--ignore-list <path>` | Шлях да ignore-ліста | `<target-dir>/.rename-agent-ignore.txt` |
+| `--no-update-ignore-list` | Не абнаўляць ignore-ліст | `false` |
+| `--lang <en|pl|be|ru>` | Мова для назваў | `en` |
+
+## Флагі: `organize` / `organize:smart`
+
+| Флаг | Апісанне | Па змаўчанні |
+|---|---|---|
+| `--target-dir <path>` | Каранёвая папка | `TARGET_DIR` або `cwd` |
+| `--out-dir <name>` | Каранёвая папка выніку ў `target-dir` | `sorted_documents` |
+| `--apply` | Рэальнае перамяшчэнне | `false` |
+| `--dry-run` | Толькі план | `true` |
+| `--limit <n>` | Ліміт файлаў | `0` |
+| `--smart` | Уключыць LLM-класіфікацыю | `false` (`true` у `organize:smart`) |
+| `--model <name>` | Тэкставая мадэль для smart-рэжыму | як у `apply` |
+| `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
+
+## Прыклады
 
 ```bash
-cd tools/rename-agent
-npm run apply -- --target-dir /Users/serj/projects/poland --provider openai --model gpt-5-mini
+# Apply dry-run
+npm --prefix tools/rename-agent run apply -- --dry-run --target-dir /Users/serj/Downloads --model gpt-4o-mini
+
+# Apply real
+npm --prefix tools/rename-agent run apply -- --target-dir /Users/serj/Downloads --model gpt-5-mini
+
+# Organize by keywords
+npm --prefix tools/rename-agent run organize -- --target-dir /Users/serj/Downloads --dry-run
+
+# Organize smart with local Ollama model
+npm --prefix tools/rename-agent run organize:smart -- --target-dir /Users/serj/Downloads --model gpt-oss:20b --dry-run
 ```
-
-### Запуск з любой папкі (без `cd`)
-
-```bash
-npm --prefix /Users/serj/projects/poland/tools/rename-agent run apply -- --target-dir /Users/serj/projects/poland --provider openai --model gpt-5-mini
-```
-
-## Сартыроўка файлаў па папках (толькі тып)
-
-Скрыпт арганізуе файлы ў структуру:
-
-`sorted_documents/<category>/file`
-
-Прыклад: `bank_statements/...`, `applications_and_decisions/...`
-
-### Папярэдні прагляд (без перамяшчэння)
-
-```bash
-npm --prefix /Users/serj/projects/poland/tools/rename-agent run organize -- --target-dir /Users/serj/projects/poland --dry-run
-```
-
-### Рэальнае перамяшчэнне
-
-```bash
-npm --prefix /Users/serj/projects/poland/tools/rename-agent run organize -- --target-dir /Users/serj/projects/poland --apply
-```
-
-Дадаткова:
-
-- `--out-dir sorted_documents` — назва каранёвай папкі для сартыроўкі
-- `--limit 100` — пратэст на першых N файлах
-
-Вынікі плана:
-
-- `outputs/organize-plan.json`
-- `outputs/organize-plan.csv`
 
 ## Вынікі
 
-Пасля запуску ствараюцца (заўсёды адзін актуальны файл, без дублікатаў):
-- `outputs/rename-plan.json`
-- `outputs/rename-plan.csv`
-- `outputs/pending-files.txt`
+У `tools/rename-agent/outputs/`:
+- `rename-plan.json`
+- `rename-plan.csv`
+- `pending-files.txt`
+- `organize-plan.json`
+- `organize-plan.csv`
 
-І дадаткова абнаўляецца каталог:
-- `DOCUMENT_CATALOG.md` (аўта-секцыя са спісам усіх файлаў)
+## Заўвагі
 
-Пры кожным запуску агент таксама аўтаматычна:
-- выдаляе старыя timestamp-файлы ў `outputs`
-- прыбірае тэхнічныя тэставыя папкі `tmp-apply-test` і `tmp-person-test`
-
-## Ignore-ліст (не сканаваць ужо апрацаваныя)
-
-- Па змаўчанні: `.rename-agent-ignore.txt` у `TARGET_DIR`.
-- Пасля кожнага запуску агент дадае апрацаваныя файлы ў ignore-ліст.
-- Каб адключыць аўта-абнаўленне: `--no-update-ignore-list`.
-- Каб задаць іншы файл: `--ignore-list /path/to/list.txt`.
-
-У `apply` ignore-ліст абнаўляецца пакрокава (пасля кожнага апрацаванага файла), таму працэс можна бяспечна працягваць пасля перапынення.
-
-## Чытанне PDF/выяў (OCR)
-
-- Для `pdf/jpg/png/...` агент выкарыстоўвае `tools/read_document.py`.
-- Для `docx` — `mammoth`, для `doc` — `textutil` (macOS).
-- Налады: `READER_PYTHON`, `READER_SCRIPT_PATH`, `OCR_LANG`.
-
-Калі ў назвах шмат `scan_unreadable`, звычайна гэта азначае, што OCR не атрымаў чытэльны тэкст з файла.
-
-## Налады правіл назваў
-
-Файл `rules.prompt.txt` — твае агульныя правілы наймення.
-
-## Хуткі працоўны сцэнар
-
-1. запусціць `apply`
-2. пры неабходнасці перапыніць
-3. запусціць `apply` зноў — агент працягне па ignore-лісце
+- `--provider` больш не выкарыстоўваецца.
+- Калі паказана непадтрымліваемая мадэль, агент адразу верне памылку са спісам даступных мадэляў.
+- Агент чытае канфіг толькі з root-файла `.env` у корані праекта.

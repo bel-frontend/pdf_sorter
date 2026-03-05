@@ -80,7 +80,7 @@ function buildOpenAIModel(model) {
 function buildGoogleModel(model) {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GOOGLE_GEMINI_API_KEY is required for provider=google");
+    throw new Error("GOOGLE_GEMINI_API_KEY is required for Gemini models");
   }
 
   return new ChatGoogleGenerativeAI({

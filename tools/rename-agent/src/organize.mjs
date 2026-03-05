@@ -58,7 +58,6 @@ function parseArgs(argv) {
     limit: 0,
     smart: false,
     include: baseConfig.include,
-    provider: baseConfig.provider,
     model: baseConfig.model,
     ollamaBaseUrl: baseConfig.ollamaBaseUrl,
     lang: baseConfig.lang,

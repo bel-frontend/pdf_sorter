@@ -1,4 +1,4 @@
-[Belarusian version / Беларуская версія](USAGE.be.md)
+[Belarusian version / Беларуская версія](README.be.md)
 
 # File Rename Agent -- Documentation
 
@@ -71,7 +71,7 @@ The `setup.sh` script automatically:
 After that, add your API key:
 
 ```bash
-nano tools/rename-agent/.env
+nano .env
 ```
 
 Done. You can now run:
@@ -103,15 +103,13 @@ Activation (`source .venv/bin/activate`) is **not required** -- all commands use
 **3. Node.js dependencies:**
 
 ```bash
-cd tools/rename-agent
-npm install
-cd ../..
+npm --prefix tools/rename-agent install
 ```
 
 **4. Configuration:**
 
 ```bash
-cp tools/rename-agent/.env.example tools/rename-agent/.env
+cp .env.example .env
 ```
 
 Edit `.env` -- add your API key and set the absolute path to the venv Python in `READER_PYTHON`.
@@ -127,15 +125,17 @@ npm run apply -- --dry-run --limit 1 --target-dir ~/Desktop
 
 ## Configuration (.env)
 
-File: `tools/rename-agent/.env`
+File: `.env` (project root)
 
 ```env
-# --- LLM Provider ---
-LLM_PROVIDER=openai          # openai | ollama | google | auto
+# --- Model selection ---
+LLM_MODEL=gpt-4o-mini        # optional global default
 
 # --- OpenAI ---
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4.1-mini    # or gpt-5-mini, gpt-4o, etc.
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_MS=90000
+OPENAI_MAX_RETRIES=2
 
 # --- Ollama (local model) ---
 OLLAMA_BASE_URL=http://localhost:11434
@@ -179,17 +179,17 @@ npm run apply -- --target-dir ~/Desktop/documents
 
 Note: `npm run apply` already includes the `--apply` flag, so files will be renamed. Add `--dry-run` to only see the plan.
 
-### Choosing an LLM Provider
+### Choosing a Model
 
 ```bash
-# OpenAI (default)
-npm run apply -- --target-dir ~/docs --provider openai --model gpt-4.1-mini
+# OpenAI
+npm run apply -- --target-dir ~/docs --model gpt-4o-mini
 
 # Google Gemini
-npm run apply -- --target-dir ~/docs --provider google --model gemini-2.5-pro
+npm run apply -- --target-dir ~/docs --model gemini-2.5-pro
 
 # Local Ollama model (offline)
-npm run apply -- --target-dir ~/docs --provider ollama --model gpt-oss:20b
+npm run apply -- --target-dir ~/docs --model gpt-oss:20b
 ```
 
 ### Naming Language
@@ -277,7 +277,7 @@ npm run apply -- --target-dir /Volumes/USB/documents
 
 ### Setting `TARGET_DIR` in `.env`
 
-Edit `tools/rename-agent/.env`:
+Edit `.env`:
 
 ```env
 TARGET_DIR=~/Documents/my-docs
@@ -357,8 +357,8 @@ npm run organize:smart -- --target-dir ~/Desktop/documents --dry-run
 # Execute sorting
 npm run organize:smart -- --target-dir ~/Desktop/documents --apply
 
-# With a specific provider
-npm run organize:smart -- --target-dir ~/docs --apply --provider openai --model gpt-4.1-mini
+# With a specific model
+npm run organize:smart -- --target-dir ~/docs --apply --model gpt-4o-mini
 ```
 
 ### Additional organize Parameters
@@ -445,8 +445,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--target-dir <path>` | Folder with files to process | from `.env` |
 | `--dry-run` | Preview only, no renaming | |
 | `--apply` | Execute renaming | |
-| `--provider <name>` | LLM provider: `openai`, `ollama`, `google`, `auto` | `openai` |
-| `--model <name>` | LLM model | `gpt-4.1-mini` |
+| `--model <name>` | LLM model from supported whitelist | `LLM_MODEL`/`OPENAI_MODEL`/`OLLAMA_MODEL`/`GOOGLE_MODEL`/`gpt-4o-mini` |
 | `--ollama-base-url <url>` | Ollama server URL | `http://localhost:11434` |
 | `--include <preset\|glob>` | File type filter: `pdf`, `photos`, `docs`, `all`, or glob | `all` |
 | `--lang <code>` | Naming language: `en`, `pl`, `be`, `ru` | `en` |
@@ -463,8 +462,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--apply` | Execute file moves | |
 | `--out-dir <name>` | Output folder name for sorting | `sorted_documents` |
 | `--smart` | Smart sorting: content analysis via LLM | disabled |
-| `--provider <name>` | LLM provider (for `--smart`) | `openai` |
-| `--model <name>` | LLM model (for `--smart`) | `gpt-4.1-mini` |
+| `--model <name>` | LLM model (for `--smart`) | same defaults as `apply` |
 | `--limit <N>` | Limit the number of files | `0` (all) |
 
 ### `.venv/bin/python tools/read_document.py` (reading)
@@ -576,7 +574,7 @@ npm run apply -- --target-dir ~/Desktop/documents --limit 5 --dry-run
 ollama serve
 
 # Then:
-npm run apply -- --target-dir ~/docs --provider ollama --model llama3.3
+npm run apply -- --target-dir ~/docs --model llama3.3:latest
 ```
 
 ### Example 5: Full Cycle -- Rename + Sort
@@ -595,7 +593,7 @@ npm run organize -- --target-dir ~/Desktop/my-docs --apply
 ### Example 6: Processing an External Drive
 
 ```bash
-npm run apply -- --target-dir /Volumes/MyUSB/scans --provider openai --model gpt-4.1-mini
+npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini
 ```
 
 ### Example 7: Read a Single Document Manually
@@ -638,11 +636,12 @@ Check that:
 - Files have a supported extension (pdf, jpg, png, tiff, doc, docx, xml)
 - Files are not listed in `.rename-agent-ignore.txt`
 
-### LLM provider error
+### LLM/model error
 
 - **OpenAI**: check `OPENAI_API_KEY` in `.env`
 - **Ollama**: make sure `ollama serve` is running
 - **Google**: check `GOOGLE_GEMINI_API_KEY`
+- **Unsupported model**: use only models from `tools/rename-agent/src/llm.mjs` (`Model` list)
 
 ### Python not found
 

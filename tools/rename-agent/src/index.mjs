@@ -130,9 +130,7 @@ async function main() {
   console.log(
     `Ignore list: ${config.ignoreListPath} (${ignoredPaths.size} entries)`,
   );
-  console.log(
-    `Found ${files.length} pending files. Provider=${config.provider}, model=${config.model}.`,
-  );
+  console.log(`Found ${files.length} pending files. Model=${config.model}.`);
   console.log(`Pending list saved: ${pendingPath}`);
 
   const usedTargets = new Set();
