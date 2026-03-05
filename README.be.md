@@ -157,6 +157,11 @@ NAMING_LANG=en                # en | pl | be | ru
 # --- OCR ---
 READER_PYTHON=               # setup.sh запоўніць аўтаматычна
 OCR_LANG=pol+eng+rus          # мовы Tesseract
+
+# --- Smart organize vision model (опцыянальна) ---
+VISION_MODEL=gpt-4o
+# Прыклад для лакальнай Ollama vision-мадэлі:
+# VISION_MODEL=gemma3:4b
 ```
 
 `setup.sh` аўтаматычна прапісвае `READER_PYTHON` пры стварэнні `.env`. Калі ўсталёўвалі ўручную -- пропішыце абсалютны шлях да `.venv/bin/python` у вашым праекце.
@@ -309,29 +314,7 @@ rename-docs --target-dir ~/docs --dry-run --limit 5
 ## Сартыроўка файлаў па катэгорыях
 
 Пасля перайменавання можна аўтаматычна рассартаваць файлы па папках-катэгорыях.
-
-### Катэгорыі
-
-| Папка | Тыпы дакументаў |
-|---|---|
-| `invoices` | Рахункі, фактуры |
-| `contracts` | Дамовы, кантракты |
-| `bank_statements` | Банкаўскія выпіскі |
-| `taxes_and_social` | PIT, VAT, ZUS, падаткі |
-| `applications_and_decisions` | Заявы, рашэнні, дазволы, побыт |
-| `certificates` | Даведкі |
-| `identity_documents` | Пашпарты |
-| `powers_of_attorney` | Даверанасці |
-| `real_estate` | Нерухомасць |
-| `telecom` | Тэлекамунікацыі, інтэрнэт, тэлефон |
-| `business_plans` | Бізнес-планы |
-| `business_registration` | Рэгістрацыя бізнесу |
-| `reports` | Рапарты, справаздачы |
-| `confirmations` | Пацвярджэнні |
-| `surveys` | Апытанні, анкеты |
-| `photos_of_people` | Фатаграфіі людзей (не дакументы) -- толькі ў `--smart` рэжыме |
-| `scans_and_photos` | Сканы, фатаграфіі дакументаў |
-| `other` | Усё астатняе |
+Файлы аўтаматычна разбіваюцца па папках-катэгорыях.
 
 ### Звычайная сартыроўка (па назве файла)
 
@@ -450,7 +433,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--include <прасэт\|glob>` | Фільтр тыпаў файлаў: `pdf`, `photos`, `docs`, `all` або glob | `all` |
 | `--lang <код>` | Мова назваў: `en`, `pl`, `be`, `ru` | `en` |
 | `--limit <N>` | Апрацаваць толькі першыя N файлаў | `0` (усе) |
-| `--ignore-list <шлях>` | Шлях да ignore-ліста | `<TARGET_DIR>/.rename-agent-ignore.txt` |
+| `--ignore-list <шлях>` | Шлях да ignore-ліста | `<project-root>/.rename-agent-ignore.txt` |
 | `--no-update-ignore-list` | Не абнаўляць ignore-ліст | абнаўляць |
 
 ### `npm run organize` (сартыроўка)
@@ -514,27 +497,27 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `organize-plan.json` | План сартыроўкі па папках |
 | `organize-plan.csv` | CSV-версія плана сартыроўкі |
 
-Дадаткова ў мэтавай папцы:
+Дадаткова:
 
-- **`DOCUMENT_CATALOG.md`** -- аўтаматычна абнаўляемы каталог усіх файлаў
-- **`.rename-agent-ignore.txt`** -- спіс ужо апрацаваных файлаў
+- У мэтавай папцы: **`DOCUMENT_CATALOG.md`** -- аўтаматычна абнаўляемы каталог усіх файлаў
+- У корані праекта: **`.rename-agent-ignore.txt`** -- спіс ужо апрацаваных файлаў
 
 ---
 
 ## Ignore-ліст і працяг працы
 
-Агент запісвае кожны апрацаваны файл у `.rename-agent-ignore.txt`. Гэта значыць:
+Агент запісвае кожны апрацаваны файл у `.rename-agent-ignore.txt` у корані праекта. Гэта значыць:
 
 1. **Можна бяспечна спыніць і працягнуць** -- пры паўторным запуску агент прапусціць ужо апрацаваныя файлы
 2. **Новыя файлы аўтаматычна падхопяцца** -- дастаткова запусціць агент зноў
-3. **Каб пераапрацаваць усё** -- выдаліце `.rename-agent-ignore.txt` з мэтавай папкі
+3. **Каб пераапрацаваць усё** -- выдаліце `.rename-agent-ignore.txt` з кораня праекта
 
 ```bash
 # Працягнуць з месца спынення
 npm run apply -- --target-dir ~/docs
 
 # Прымусіць пераапрацоўку ўсіх файлаў
-rm ~/docs/.rename-agent-ignore.txt
+rm ./.rename-agent-ignore.txt
 npm run apply -- --target-dir ~/docs
 
 # Не абнаўляць ignore-ліст (разавы прагон)
@@ -634,7 +617,7 @@ OCR не змог распазнаць тэкст. Магчымыя прычын
 Праверце, што:
 - `--target-dir` паказвае на правільную папку
 - Файлы маюць падтрымліваемае пашырэнне (pdf, jpg, png, tiff, doc, docx, xml)
-- Файлы не ў `.rename-agent-ignore.txt`
+- Файлы не ў root `.rename-agent-ignore.txt`
 
 ### Памылка LLM/мадэлі
 

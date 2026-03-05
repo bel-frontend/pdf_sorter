@@ -26,6 +26,7 @@ Ollama:
 - `llama3.2`
 - `mistral-small3.1`
 - `llama3.3:latest`
+- `gemma3:4b`
 - `gemma3:12b`
 - `gpt-oss:20b`
 
@@ -71,6 +72,8 @@ OCR_LANG=pol+eng+rus
 
 # Smart organize vision model (optional)
 VISION_MODEL=gpt-4o
+# Example for local Ollama vision:
+# VISION_MODEL=gemma3:4b
 ```
 
 ## Скрыпты
@@ -93,7 +96,7 @@ VISION_MODEL=gpt-4o
 | `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
 | `--limit <n>` | Апрацаваць толькі першыя `n` файлаў | `0` (без ліміту) |
 | `--include <preset|glob>` | Фільтр файлаў (`all,pdf,photos,docs` або glob) | `all` |
-| `--ignore-list <path>` | Шлях да ignore-ліста | `<target-dir>/.rename-agent-ignore.txt` |
+| `--ignore-list <path>` | Шлях да ignore-ліста | `<project-root>/.rename-agent-ignore.txt` |
 | `--no-update-ignore-list` | Не абнаўляць ignore-ліст | `false` |
 | `--lang <en|pl|be|ru>` | Мова для назваў | `en` |
 

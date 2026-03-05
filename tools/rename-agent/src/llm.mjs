@@ -14,6 +14,7 @@ export const Model = {
   GPT5_NANO: "gpt-5-nano",
   MISTRAL: "mistral-small3.1",
   LLAMA3_3: "llama3.3:latest",
+  GEMMA3_4: "gemma3:4b",
   GEMMA3_12: "gemma3:12b",
   GEMINI_PRO: "gemini-2.5-pro",
   GPT_OSS_20B: "gpt-oss:20b",
@@ -117,6 +118,7 @@ export function buildChatModel(config) {
     case Model.LLM3:
     case Model.MISTRAL:
     case Model.LLAMA3_3:
+    case Model.GEMMA3_4:
     case Model.GEMMA3_12:
     case Model.GPT_OSS_20B:
       return buildOllamaModel(model, config.ollamaBaseUrl);

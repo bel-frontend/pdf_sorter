@@ -60,9 +60,9 @@ export function parseArgs(argv) {
   }
 
   if (!args.ignoreListPath) {
-    args.ignoreListPath = path.join(args.targetDir, ".rename-agent-ignore.txt");
+    args.ignoreListPath = path.join(projectRoot, ".rename-agent-ignore.txt");
   } else if (!path.isAbsolute(args.ignoreListPath)) {
-    args.ignoreListPath = path.resolve(process.cwd(), args.ignoreListPath);
+    args.ignoreListPath = path.resolve(projectRoot, args.ignoreListPath);
   }
 
   if (!args.model) {

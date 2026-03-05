@@ -157,6 +157,11 @@ NAMING_LANG=en                # en | pl | be | ru
 # --- OCR ---
 READER_PYTHON=               # setup.sh fills this automatically
 OCR_LANG=pol+eng+rus          # Tesseract languages
+
+# --- Smart organize vision model (optional) ---
+VISION_MODEL=gpt-4o
+# Example for local Ollama vision:
+# VISION_MODEL=gemma3:4b
 ```
 
 `setup.sh` automatically sets `READER_PYTHON` when creating `.env`. If you installed manually, set the absolute path to `.venv/bin/python` in your project.
@@ -309,29 +314,7 @@ rename-docs --target-dir ~/docs --dry-run --limit 5
 ## Sorting Files by Category
 
 After renaming, you can automatically sort files into category folders.
-
-### Categories
-
-| Folder | Document Types |
-|---|---|
-| `real_estate` | Real estate documents |
-| `telecom` | Telecom bills, phone contracts |
-| `business_plans` | Business plans |
-| `business_registration` | Business registration documents |
-| `reports` | Reports |
-| `confirmations` | Confirmations, receipts |
-| `bank_statements` | Bank statements, account extracts |
-| `surveys` | Surveys, questionnaires |
-| `invoices` | Invoices, bills |
-| `contracts` | Contracts, agreements |
-| `applications_and_decisions` | Applications, decisions, permits, residence |
-| `powers_of_attorney` | Powers of attorney |
-| `certificates` | Certificates, attestations |
-| `taxes_and_social` | Tax returns, social insurance, VAT |
-| `identity_documents` | Passports, ID cards |
-| `photos_of_people` | Photos of people (not documents) -- only in `--smart` mode |
-| `scans_and_photos` | Scans, document photos |
-| `other` | Everything else |
+Files are split into automatically detected category folders.
 
 ### Standard Sorting (by file name)
 
@@ -450,7 +433,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--include <preset\|glob>` | File type filter: `pdf`, `photos`, `docs`, `all`, or glob | `all` |
 | `--lang <code>` | Naming language: `en`, `pl`, `be`, `ru` | `en` |
 | `--limit <N>` | Process only the first N files | `0` (all) |
-| `--ignore-list <path>` | Path to the ignore list | `<TARGET_DIR>/.rename-agent-ignore.txt` |
+| `--ignore-list <path>` | Path to the ignore list | `<project-root>/.rename-agent-ignore.txt` |
 | `--no-update-ignore-list` | Do not update the ignore list | update |
 
 ### `npm run organize` (sorting)
@@ -514,27 +497,27 @@ After running, the agent creates files in `tools/rename-agent/outputs/`:
 | `organize-plan.json` | Sorting plan by folders |
 | `organize-plan.csv` | CSV version of the sorting plan |
 
-Additionally, in the target folder:
+Additionally:
 
-- **`DOCUMENT_CATALOG.md`** -- automatically updated catalog of all files
-- **`.rename-agent-ignore.txt`** -- list of already processed files
+- In target folder: **`DOCUMENT_CATALOG.md`** -- automatically updated catalog of all files
+- In project root: **`.rename-agent-ignore.txt`** -- list of already processed files
 
 ---
 
 ## Ignore List and Resuming Work
 
-The agent records every processed file in `.rename-agent-ignore.txt`. This means:
+The agent records every processed file in `.rename-agent-ignore.txt` in project root. This means:
 
 1. **You can safely stop and resume** -- on the next run, the agent will skip already processed files
 2. **New files are picked up automatically** -- just run the agent again
-3. **To reprocess everything** -- delete `.rename-agent-ignore.txt` from the target folder
+3. **To reprocess everything** -- delete `.rename-agent-ignore.txt` from the project root
 
 ```bash
 # Resume from where you left off
 npm run apply -- --target-dir ~/docs
 
 # Force reprocessing of all files
-rm ~/docs/.rename-agent-ignore.txt
+rm ./.rename-agent-ignore.txt
 npm run apply -- --target-dir ~/docs
 
 # Do not update the ignore list (one-time run)
@@ -634,7 +617,7 @@ Solution: run `brew install tesseract-lang` and check `OCR_LANG` in `.env`.
 Check that:
 - `--target-dir` points to the correct folder
 - Files have a supported extension (pdf, jpg, png, tiff, doc, docx, xml)
-- Files are not listed in `.rename-agent-ignore.txt`
+- Files are not listed in the root `.rename-agent-ignore.txt`
 
 ### LLM/model error
 
