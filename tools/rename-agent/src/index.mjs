@@ -32,7 +32,7 @@ function makeCatalogAutoSection({ generatedAt, files }) {
 }
 
 async function upsertCatalogSection({ targetDir, files }) {
-  const catalogPath = path.join(targetDir, "КАТАЛОГ_ДАКУМЕНТАЎ.md");
+  const catalogPath = path.join(targetDir, "DOCUMENT_CATALOG.md");
   const startMarker = "<!-- AUTO_FILE_INDEX:START -->";
   const endMarker = "<!-- AUTO_FILE_INDEX:END -->";
   const sectionBody = makeCatalogAutoSection({

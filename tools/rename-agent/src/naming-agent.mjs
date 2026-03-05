@@ -10,24 +10,28 @@ const schema = z.object({
   confidence: z.any().optional(),
 });
 
-const englishToPolishToken = {
-  invoice: "faktura",
-  application: "wniosek",
-  certificate: "zaswiadczenie",
-  contract: "umowa",
-  report: "raport",
-  passport: "paszport",
-  statement: "wyciag",
-  bank: "bankowy",
-  payment: "platnosc",
-  declaration: "deklaracja",
-  residence: "pobyt",
-  power: "pelnomocnictwo",
-  attorney: "pelnomocnictwo",
-  scan: "skan",
-  unreadable: "nieczytelny",
-  photo: "zdjecie",
+const TOKEN_MAPS = {
+  pl: {
+    invoice: "faktura",
+    application: "wniosek",
+    certificate: "zaswiadczenie",
+    contract: "umowa",
+    report: "raport",
+    passport: "paszport",
+    statement: "wyciag",
+    bank: "bankowy",
+    payment: "platnosc",
+    declaration: "deklaracja",
+    residence: "pobyt",
+    power: "pelnomocnictwo",
+    attorney: "pelnomocnictwo",
+    scan: "skan",
+    unreadable: "nieczytelny",
+    photo: "zdjecie",
+  },
 };
+
+let _activeTokenMap = {};
 
 function normalizeConfidence(value) {
   const numberValue = Number(value);
@@ -75,7 +79,7 @@ function sanitizeBaseName(name) {
 
   const replaced = basic
     .split("_")
-    .map((token) => englishToPolishToken[token] || token)
+    .map((token) => _activeTokenMap[token] || token)
     .join("_")
     .replace(/[^a-z0-9_]+/g, "_")
     .replace(/_+/g, "_")
@@ -179,9 +183,10 @@ const LANG_PROMPTS = {
   },
 };
 
-export async function suggestName({ llm, file, content, rules, lang = "pl" }) {
+export async function suggestName({ llm, file, content, rules, lang = "en" }) {
+  _activeTokenMap = TOKEN_MAPS[lang] || {};
   const ext = path.extname(file.relativePath).toLowerCase();
-  const lp = LANG_PROMPTS[lang] || LANG_PROMPTS.pl;
+  const lp = LANG_PROMPTS[lang] || LANG_PROMPTS.en;
   const prompt = [
     "You are a file naming assistant.",
     "Return ONLY strict JSON with keys: title,type,summary,date,person,confidence.",

@@ -24,35 +24,36 @@ const defaultIgnore = [
   "**/node_modules/**",
   "**/.DS_Store",
   "**/tools/rename-agent/**",
+  "**/sorted_documents/**",
   "**/dokumenty_posortowane/**",
 ];
 
 const CATEGORIES = [
-  "nieruchomosc",
-  "upc",
-  "biznesplany",
-  "rejestracja_jdg",
-  "raporty",
-  "potwierdzenia",
-  "bankowe_wyciagi",
-  "ankiety",
-  "faktury",
-  "umowy",
-  "wnioski_i_decyzje",
-  "pelnomocnictwa",
-  "zaswiadczenia",
-  "podatki_i_zus",
-  "dokumenty_tozsamosci",
-  "zdjecia_ludzi",
-  "skany_i_zdjecia",
-  "inne",
+  "real_estate",
+  "telecom",
+  "business_plans",
+  "business_registration",
+  "reports",
+  "confirmations",
+  "bank_statements",
+  "surveys",
+  "invoices",
+  "contracts",
+  "applications_and_decisions",
+  "powers_of_attorney",
+  "certificates",
+  "taxes_and_social",
+  "identity_documents",
+  "photos_of_people",
+  "scans_and_photos",
+  "other",
 ];
 
 function parseArgs(argv) {
   const baseConfig = parseBaseArgs(argv);
   const args = {
     targetDir: baseConfig.targetDir || process.env.TARGET_DIR || process.cwd(),
-    outDirName: "dokumenty_posortowane",
+    outDirName: "sorted_documents",
     dryRun: true,
     limit: 0,
     smart: false,
@@ -82,60 +83,73 @@ function detectCategory(relativePath) {
 
   const byKeywords = [
     {
-      category: "nieruchomosc",
+      category: "real_estate",
       keys: [
+        "real_estate",
+        "property",
+        "mortgage",
+        "lease",
+        "rental",
         "nieruchom",
         "ksiega_wieczyst",
-        "ksiegi_wieczyst",
         "wieczyst",
         "mieszkan",
         "lokal",
         "najem",
         "akt_notarial",
-        "sprzedazy_mieszkania",
       ],
     },
     {
-      category: "upc",
+      category: "telecom",
       keys: [
+        "telecom",
+        "internet",
+        "mobile",
+        "subscription",
         "upc",
         "play_telewizja",
         "play_internet",
-        "abonencka_upc",
-        "kanalow_upc",
-        "cennik_uslug_upc",
       ],
     },
     {
-      category: "biznesplany",
+      category: "business_plans",
       keys: [
-        "biznesplan",
+        "business_plan",
         "businessplan",
+        "biznesplan",
         "plan_biznes",
-        "poradnik_biznesplan",
         "plan_dzialalnosci",
       ],
     },
     {
-      category: "rejestracja_jdg",
-      keys: ["ceidg", "jdg", "wpis", "rejestracj", "dzialalnosci_gospodarczej"],
-    },
-    {
-      category: "raporty",
-      keys: ["raport", "sprawozdanie", "opis_dzialalnosci"],
-    },
-    {
-      category: "potwierdzenia",
+      category: "business_registration",
       keys: [
-        "wydruki_potwierdzenia",
-        "potwierdzenie_oplaty",
-        "potwierdzenie_wysylki",
-        "przejazd_granica",
+        "registration",
+        "ceidg",
+        "jdg",
+        "wpis",
+        "rejestracj",
+        "dzialalnosci_gospodarczej",
       ],
     },
     {
-      category: "bankowe_wyciagi",
+      category: "reports",
+      keys: ["report", "raport", "sprawozdanie"],
+    },
+    {
+      category: "confirmations",
       keys: [
+        "confirmation",
+        "receipt",
+        "potwierdzenie",
+        "potwierdzenie_oplaty",
+        "potwierdzenie_wysylki",
+      ],
+    },
+    {
+      category: "bank_statements",
+      keys: [
+        "bank_statement",
         "wyciag",
         "bank",
         "pko",
@@ -144,29 +158,39 @@ function detectCategory(relativePath) {
         "trans_details",
       ],
     },
-    { category: "ankiety", keys: ["ankieta"] },
-    { category: "faktury", keys: ["faktura", "invoice", "factur"] },
-    { category: "umowy", keys: ["umowa", "aneks", "contract"] },
+    { category: "surveys", keys: ["survey", "ankieta"] },
+    { category: "invoices", keys: ["invoice", "faktura", "factur", "bill"] },
     {
-      category: "wnioski_i_decyzje",
+      category: "contracts",
+      keys: ["contract", "agreement", "umowa", "aneks"],
+    },
+    {
+      category: "applications_and_decisions",
       keys: [
+        "application",
+        "decision",
+        "permit",
+        "residence",
         "wniosek",
         "decyzja",
         "zezwolenie",
-        "proceedingsdocument",
         "wezwanie",
         "pobyt",
         "cudzoziemca",
       ],
     },
-    { category: "pelnomocnictwa", keys: ["pelnomocnictwo", "upl", "pelnomoc"] },
     {
-      category: "zaswiadczenia",
-      keys: ["zaswiadczenie", "oswiadczenie", "certificate", "zgoda", "rodo"],
+      category: "powers_of_attorney",
+      keys: ["power_of_attorney", "pelnomocnictwo", "pelnomoc", "upl"],
     },
     {
-      category: "podatki_i_zus",
+      category: "certificates",
+      keys: ["certificate", "zaswiadczenie", "oswiadczenie", "zgoda", "rodo"],
+    },
+    {
+      category: "taxes_and_social",
       keys: [
+        "tax",
         "pit",
         "vat",
         "jpk",
@@ -183,20 +207,22 @@ function detectCategory(relativePath) {
       ],
     },
     {
-      category: "dokumenty_tozsamosci",
+      category: "identity_documents",
       keys: [
+        "passport",
         "paszport",
         "paspport",
-        "passport",
+        "id_card",
         "dowod",
         "karta",
         "wiza",
+        "visa",
         "pesel",
       ],
     },
     {
-      category: "skany_i_zdjecia",
-      keys: ["skan", "zdjecie", "img_", "photo", "camphoto", "scan"],
+      category: "scans_and_photos",
+      keys: ["scan", "skan", "zdjecie", "img_", "photo", "camphoto"],
     },
   ];
 
@@ -206,7 +232,7 @@ function detectCategory(relativePath) {
     }
   }
 
-  return "inne";
+  return "other";
 }
 
 function buildClassifySystemPrompt() {
@@ -215,15 +241,15 @@ function buildClassifySystemPrompt() {
     `Categories: ${CATEGORIES.join(", ")}`,
     "",
     "Rules:",
-    "- zdjecia_ludzi: photos of people (selfies, portraits, group photos) that are NOT document scans",
-    "- skany_i_zdjecia: scanned documents, photos of documents, unreadable scans",
-    "- dokumenty_tozsamosci: passports, IDs, visas, PESEL",
-    "- faktury: invoices, bills",
-    "- umowy: contracts, agreements",
-    "- bankowe_wyciagi: bank statements, payment history",
-    "- podatki_i_zus: PIT, VAT, ZUS, tax declarations",
-    "- wnioski_i_decyzje: applications, decisions, permits, residence permits",
-    "- inne: if nothing else fits",
+    "- photos_of_people: photos of people (selfies, portraits, group photos) that are NOT document scans",
+    "- scans_and_photos: scanned documents, photos of documents, unreadable scans",
+    "- identity_documents: passports, IDs, visas, PESEL",
+    "- invoices: invoices, bills",
+    "- contracts: contracts, agreements",
+    "- bank_statements: bank statements, payment history",
+    "- taxes_and_social: PIT, VAT, ZUS, tax declarations",
+    "- applications_and_decisions: applications, decisions, permits, residence permits",
+    "- other: if nothing else fits",
     "",
     "Reply with ONLY the category name, nothing else.",
   ].join("\n");
@@ -297,7 +323,7 @@ async function detectCategorySmart({ llm, visionLlm, absPath, relativePath }) {
   }
   // Фолбэк: прыбіраем усё акрамя літар і _
   const cleaned = rawResponse.replace(/[^a-z_]/g, "");
-  return CATEGORIES.includes(cleaned) ? cleaned : "inne";
+  return CATEGORIES.includes(cleaned) ? cleaned : "other";
 }
 
 async function exists(filePath) {

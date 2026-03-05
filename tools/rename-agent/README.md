@@ -67,9 +67,9 @@ npm --prefix /Users/serj/projects/poland/tools/rename-agent run apply -- --targe
 
 Скрыпт арганізуе файлы ў структуру:
 
-`dokumenty_posortowane/<kategoria>/plik`
+`sorted_documents/<category>/file`
 
-Прыклад: `bankowe_wyciagi/...`, `wnioski_i_decyzje/...`
+Прыклад: `bank_statements/...`, `applications_and_decisions/...`
 
 ### Папярэдні прагляд (без перамяшчэння)
 
@@ -85,7 +85,7 @@ npm --prefix /Users/serj/projects/poland/tools/rename-agent run organize -- --ta
 
 Дадаткова:
 
-- `--out-dir dokumenty_posortowane` — назва каранёвай папкі для сартыроўкі
+- `--out-dir sorted_documents` — назва каранёвай папкі для сартыроўкі
 - `--limit 100` — пратэст на першых N файлах
 
 Вынікі плана:
@@ -101,7 +101,7 @@ npm --prefix /Users/serj/projects/poland/tools/rename-agent run organize -- --ta
 - `outputs/pending-files.txt`
 
 І дадаткова абнаўляецца каталог:
-- `КАТАЛОГ_ДАКУМЕНТАЎ.md` (аўта-секцыя са спісам усіх файлаў)
+- `DOCUMENT_CATALOG.md` (аўта-секцыя са спісам усіх файлаў)
 
 Пры кожным запуску агент таксама аўтаматычна:
 - выдаляе старыя timestamp-файлы ў `outputs`

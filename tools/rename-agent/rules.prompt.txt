@@ -1,13 +1,13 @@
-Cel: generować sensowną nazwę pliku na podstawie jego treści.
+Goal: generate a meaningful file name based on the file's content.
 
-Zasady nazw:
-1) Język nazwy: polski, alfabet łaciński bez znaków diakrytycznych, snake_case.
-2) Format preferowany: <kategoria>_<temat>_<data>.
-3) Kategorie przykładowe: faktura, pit, vat, zus, wyciag_bankowy, pobyt, umowa, zaswiadczenie, pelnomocnictwo, wniosek, zdjecie, skan, raport.
-4) Jeśli data znana — YYYY-MM lub YYYY-MM-DD; w przeciwnym razie bez daty.
-5) Bez losowych hash/id, chyba że to oficjalny numer dokumentu.
-6) Nazwa powinna być krótka, jasna i unikalna w obrębie folderu.
-7) Nie zmieniaj rozszerzenia.
-8) Jeśli treść nieczytelna — użyj: skan_nieczytelny.
+Naming rules:
+1) Language: English, Latin alphabet, snake_case.
+2) Preferred format: <category>_<topic>_<date>.
+3) Example categories: invoice, tax_return, vat, social_insurance, bank_statement, residence_permit, contract, certificate, power_of_attorney, application, photo, scan, report.
+4) If date is known — YYYY-MM or YYYY-MM-DD; otherwise omit the date.
+5) No random hashes/IDs unless it is an official document number.
+6) The name should be short, clear, and unique within the folder.
+7) Do not change the file extension.
+8) If content is unreadable — use: unreadable_scan.
 
-Zwracaj JSON z polami: title,type,summary,date,confidence.
+Return JSON with fields: title,type,summary,date,confidence.
