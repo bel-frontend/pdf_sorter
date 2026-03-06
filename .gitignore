@@ -6,3 +6,5 @@ node_modules/
 .env
 .venv/
 .rename-agent-ignore*.txt
+tools/__pycache__/
+tools/rename-agent/outputs/

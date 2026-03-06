@@ -449,6 +449,7 @@ async function main() {
 
   let llm = null;
   let visionLlm = null;
+  let visionDisabledReason = "";
   if (args.smart) {
     llm = buildChatModel(args);
     // Vision-мадэль для аналізу выяў (GPT-4o ці Gemini)
@@ -460,6 +461,7 @@ async function main() {
       console.log(
         `Smart mode: text=${args.model}, vision=disabled (no key for ${visionModel})`,
       );
+      visionDisabledReason = `init failed for ${visionModel}`;
     }
   }
 
@@ -483,9 +485,37 @@ async function main() {
         });
         console.log(`${progress} Classified: ${item.relPath} -> ${category}`);
       } catch (err) {
-        console.error(
-          `${progress} Smart classify failed for ${item.relPath}: ${err.message}`,
-        );
+        const errMsg = String(err?.message || err || "");
+        const isVisionNotFound =
+          visionLlm && /model\s+['"].+['"]\s+not\s+found/i.test(errMsg);
+
+        if (isVisionNotFound) {
+          visionLlm = null;
+          visionDisabledReason = errMsg;
+          console.error(
+            `${progress} Vision model unavailable (${errMsg}). Falling back to OCR/text classification for remaining files.`,
+          );
+          try {
+            category = await detectCategorySmart({
+              llm,
+              visionLlm: null,
+              absPath: item.absPath,
+              relativePath: item.relPath,
+            });
+            console.log(
+              `${progress} Classified via OCR/text fallback: ${item.relPath} -> ${category}`,
+            );
+            continue;
+          } catch (fallbackErr) {
+            console.error(
+              `${progress} OCR/text fallback failed for ${item.relPath}: ${fallbackErr.message}`,
+            );
+          }
+        } else {
+          console.error(
+            `${progress} Smart classify failed for ${item.relPath}: ${errMsg}`,
+          );
+        }
         category = detectCategory(item.relPath);
       }
     } else {
@@ -545,6 +575,13 @@ async function main() {
         totalSelected: selected.length,
         totalIgnored: files.length - filesAfterIgnore.length,
         totalMove: toMove.length,
+        smartMode: args.smart
+          ? {
+              textModel: args.model,
+              visionEnabled: Boolean(visionLlm),
+              visionDisabledReason: visionDisabledReason || null,
+            }
+          : null,
         operations: operations.map(({ fromAbs, toAbs, ...rest }) => rest),
       },
       null,
