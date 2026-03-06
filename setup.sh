@@ -7,6 +7,8 @@ ENV_FILE="$PROJECT_ROOT/.env"
 ENV_TEMPLATE="$PROJECT_ROOT/.env.example"
 RENAME_IGNORE_FILE="$PROJECT_ROOT/.rename-agent-ignore-rename.txt"
 ORGANIZE_IGNORE_FILE="$PROJECT_ROOT/.rename-agent-ignore-organize.txt"
+VENV_DIR="$PROJECT_ROOT/.venv"
+VENV_PYTHON="$VENV_DIR/bin/python"
 
 echo "=== File Rename Agent — setup ==="
 echo "Project root: $PROJECT_ROOT"
@@ -14,13 +16,30 @@ echo ""
 
 # 1. Python venv
 echo "[1/4] Python venv..."
-if [ ! -d "$PROJECT_ROOT/.venv" ]; then
-    python3 -m venv "$PROJECT_ROOT/.venv"
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR"
     echo "  venv created"
 else
     echo "  venv already exists"
 fi
-"$PROJECT_ROOT/.venv/bin/pip" install --quiet pdfplumber pytesseract Pillow pdf2image PyMuPDF
+
+if [ ! -x "$VENV_PYTHON" ]; then
+    echo "  ERROR: venv is broken ($VENV_PYTHON missing)"
+    echo "  Remove .venv and run setup again."
+    exit 1
+fi
+
+if ! "$VENV_PYTHON" -m pip --version >/dev/null 2>&1; then
+    echo "  pip missing in venv, restoring with ensurepip..."
+    if ! "$VENV_PYTHON" -m ensurepip --upgrade >/dev/null 2>&1; then
+        echo "  ERROR: cannot bootstrap pip in venv."
+        echo "  On Debian/Ubuntu install: sudo apt install python3-venv"
+        echo "  Then remove .venv and run setup again."
+        exit 1
+    fi
+fi
+
+"$VENV_PYTHON" -m pip install --quiet pdfplumber pytesseract Pillow pdf2image PyMuPDF
 echo "  pip packages installed"
 
 # 2. Node.js dependencies
