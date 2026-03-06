@@ -14,6 +14,22 @@ const INCLUDE_PRESETS = {
   docs: "**/*.{doc,docx,xml}",
 };
 
+function resolveDefaultModel() {
+  if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
+
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL) {
+    return process.env.OPENAI_MODEL;
+  }
+
+  if (process.env.OLLAMA_MODEL) return process.env.OLLAMA_MODEL;
+
+  if (process.env.GOOGLE_GEMINI_API_KEY && process.env.GOOGLE_MODEL) {
+    return process.env.GOOGLE_MODEL;
+  }
+
+  return "gpt-oss:20b";
+}
+
 export function parseArgs(argv) {
   const defaultTargetDir = process.env.TARGET_DIR || "";
   const args = {
@@ -70,12 +86,7 @@ export function parseArgs(argv) {
   }
 
   if (!args.model) {
-    args.model =
-      process.env.LLM_MODEL ||
-      process.env.OPENAI_MODEL ||
-      process.env.OLLAMA_MODEL ||
-      process.env.GOOGLE_MODEL ||
-      "gpt-4o-mini";
+    args.model = resolveDefaultModel();
   }
 
   return args;

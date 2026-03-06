@@ -42,7 +42,12 @@ cp .env.example .env
 ## Канфіг `.env` (у корані праекта)
 
 ```env
-# Default model (priority: LLM_MODEL -> OPENAI_MODEL -> OLLAMA_MODEL -> GOOGLE_MODEL)
+# Default model priority:
+# 1) LLM_MODEL
+# 2) OPENAI_MODEL (only with OPENAI_API_KEY)
+# 3) OLLAMA_MODEL
+# 4) GOOGLE_MODEL (only with GOOGLE_GEMINI_API_KEY)
+# Fallback: gpt-oss:20b
 LLM_MODEL=gpt-4o-mini
 
 # OpenAI
@@ -107,7 +112,7 @@ VISION_MODEL=gpt-4o
 | `--target-dir <path>` | Каранёвая папка для сканавання | `TARGET_DIR` з `.env` |
 | `--apply` | Рэальныя змены (не dry-run) | `false` |
 | `--dry-run` | Толькі план, без перайменавання | `true` |
-| `--model <name>` | Мадэль са спісу вышэй | `LLM_MODEL`/`OPENAI_MODEL`/... |
+| `--model <name>` | Мадэль са спісу вышэй | `LLM_MODEL` або аўта-выбар па ключах/API (`gpt-oss:20b` як fallback) |
 | `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
 | `--limit <n>` | Апрацаваць толькі першыя `n` файлаў | `0` (без ліміту) |
 | `--include <preset|glob>` | Фільтр файлаў (`all,pdf,photos,docs` або glob) | `all` |

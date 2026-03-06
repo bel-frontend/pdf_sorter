@@ -559,7 +559,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--target-dir <шлях>` | Папка з файламі для апрацоўкі | з `.env` |
 | `--dry-run` | Толькі прагляд, без перайменавання | |
 | `--apply` | Выканаць перайменаванне | |
-| `--model <назва>` | Мадэль LLM з whitelist | `LLM_MODEL`/`OPENAI_MODEL`/`OLLAMA_MODEL`/`GOOGLE_MODEL`/`gpt-4o-mini` |
+| `--model <назва>` | Мадэль LLM з whitelist | `LLM_MODEL` або аўта-выбар па даступных ключах (`gpt-oss:20b` як fallback) |
 | `--ollama-base-url <url>` | URL сервера Ollama | `http://localhost:11434` |
 | `--include <прасэт\|glob>` | Фільтр тыпаў файлаў: `pdf`, `photos`, `docs`, `all` або glob | `all` |
 | `--lang <код>` | Мова назваў: `en`, `pl`, `be`, `ru` | `en` |

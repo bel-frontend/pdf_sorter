@@ -559,7 +559,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--target-dir <path>` | Folder with files to process | from `.env` |
 | `--dry-run` | Preview only, no renaming | |
 | `--apply` | Execute renaming | |
-| `--model <name>` | LLM model from supported whitelist | `LLM_MODEL`/`OPENAI_MODEL`/`OLLAMA_MODEL`/`GOOGLE_MODEL`/`gpt-4o-mini` |
+| `--model <name>` | LLM model from supported whitelist | `LLM_MODEL` or provider-aware auto selection (`gpt-oss:20b` fallback) |
 | `--ollama-base-url <url>` | Ollama server URL | `http://localhost:11434` |
 | `--include <preset\|glob>` | File type filter: `pdf`, `photos`, `docs`, `all`, or glob | `all` |
 | `--lang <code>` | Naming language: `en`, `pl`, `be`, `ru` | `en` |
