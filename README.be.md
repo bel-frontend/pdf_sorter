@@ -12,18 +12,19 @@
 
 1. [Падтрымліваемыя мадэлі (хутка)](#падтрымліваемыя-мадэлі-хутка)
 2. [Патрабаванні](#патрабаванні)
-3. [Устаноўка і разгортванне](#устаноўка-і-разгортванне)
-4. [Канфігурацыя (.env)](#канфігурацыя-env)
-5. [Запуск перайменавання](#запуск-перайменавання)
-6. [Запуск з рознымі папкамі](#запуск-з-рознымі-папкамі)
-7. [Сартыроўка файлаў па катэгорыях](#сартыроўка-файлаў-па-катэгорыях)
-8. [Чытанне дакументаў (OCR)](#чытанне-дакументаў-ocr)
-9. [Усе параметры каманднага радка](#усе-параметры-каманднага-радка)
-10. [Правілы наймення](#правілы-наймення)
-11. [Вынікі працы](#вынікі-працы)
-12. [Ignore-ліст і працяг працы](#ignore-ліст-і-працяг-працы)
-13. [Прыклады выкарыстання](#прыклады-выкарыстання)
-14. [Пытанні і праблемы](#пытанні-і-праблемы)
+3. [Пакрокавы сцэнар (рэкамендаваны)](#пакрокавы-сцэнар-рэкамендаваны)
+4. [Устаноўка і разгортванне](#устаноўка-і-разгортванне)
+5. [Канфігурацыя (.env)](#канфігурацыя-env)
+6. [Запуск перайменавання](#запуск-перайменавання)
+7. [Запуск з рознымі папкамі](#запуск-з-рознымі-папкамі)
+8. [Сартыроўка файлаў па катэгорыях](#сартыроўка-файлаў-па-катэгорыях)
+9. [Чытанне дакументаў (OCR)](#чытанне-дакументаў-ocr)
+10. [Усе параметры каманднага радка](#усе-параметры-каманднага-радка)
+11. [Правілы наймення](#правілы-наймення)
+12. [Вынікі працы](#вынікі-працы)
+13. [Ignore-ліст і працяг працы](#ignore-ліст-і-працяг-працы)
+14. [Прыклады выкарыстання](#прыклады-выкарыстання)
+15. [Пытанні і праблемы](#пытанні-і-праблемы)
 
 ---
 
@@ -56,20 +57,26 @@ Ollama:
 
 ### Сістэмныя залежнасці
 
-| Залежнасць | Навошта | Устаноўка (macOS) |
-|---|---|---|
-| **Node.js** (>=18) | Асноўны рантайм агента | `brew install node` |
-| **Python 3.10+** | OCR і чытанне PDF | `brew install python` |
-| **Tesseract OCR** | Распазнаванне тэксту з выяў | `brew install tesseract` |
-| **Poppler** | Канвертацыя PDF у выявы для OCR | `brew install poppler` |
+| Залежнасць | Навошта | macOS | Linux (Ubuntu/Debian) | Windows |
+|---|---|---|---|---|
+| **Node.js** (>=18) | Асноўны рантайм агента | `brew install node` | `sudo apt update && sudo apt install -y nodejs npm` | Усталюйце Node.js LTS з https://nodejs.org |
+| **Python 3.10+** | OCR і чытанне PDF | `brew install python` | `sudo apt install -y python3 python3-venv python3-pip` | Усталюйце Python 3.10+ з https://python.org (адзначце "Add Python to PATH") |
+| **Tesseract OCR** | Распазнаванне тэксту з выяў | `brew install tesseract` | `sudo apt install -y tesseract-ocr` | Усталюйце праз `winget install UB-Mannheim.TesseractOCR` |
+| **Poppler** | Канвертацыя PDF у выявы для OCR | `brew install poppler` | `sudo apt install -y poppler-utils` | Усталюйце праз `winget install oschwartz10612.Poppler` або дадайце `poppler/bin` у PATH уручную |
 
 ### Моўныя пакеты Tesseract
 
 Для працы з польскімі, англійскімі і рускімі дакументамі:
 
 ```bash
+# macOS
 brew install tesseract-lang
+
+# Linux (Ubuntu/Debian)
+sudo apt install -y tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-rus
 ```
+
+На Windows дадайце патрэбныя моўныя файлы ў ўстаноўку Tesseract і праверце `OCR_LANG` у `.env` (прыклад: `pol+eng+rus`).
 
 ### API-ключы (хаця б адзін)
 
@@ -79,9 +86,23 @@ brew install tesseract-lang
 
 ---
 
+## Пакрокавы сцэнар (рэкамендаваны)
+
+Выкарыстоўвайце гэты парадак для першага запуску:
+
+1. Усталюйце сістэмныя залежнасці з раздзела [Патрабаванні](#патрабаванні) для вашай АС.
+2. Выканайце [Устаноўка і разгортванне](#устаноўка-і-разгортванне) (хуткі або ручны сцэнар).
+3. Запоўніце API-настройкі ў [Канфігурацыя (.env)](#канфігурацыя-env).
+4. Зрабіце бяспечны preview-запуск з [Запуск перайменавання](#запуск-перайменавання) з `--dry-run`.
+5. Запусціце без `--dry-run`, каб прымяніць перайменаванне.
+6. Пры патрэбе зрабіце [Сартыроўка файлаў па катэгорыях](#сартыроўка-файлаў-па-катэгорыях).
+7. Калі ёсць праблемы з OCR/мадэллю, перайдзіце ў [Пытанні і праблемы](#пытанні-і-праблемы).
+
+---
+
 ## Устаноўка і разгортванне
 
-### Хуткі старт (3 крокі)
+### Хуткі старт (macOS/Linux)
 
 ```bash
 git clone <url-рэпазіторыя>
@@ -106,6 +127,31 @@ nano .env
 npm run apply -- --dry-run --target-dir ~/Desktop/documents
 ```
 
+### Хуткі старт (Windows, PowerShell)
+
+`setup.sh` гэта Unix shell-скрыпт, таму на Windows лепш зрабіць ручную ўстаноўку ў PowerShell:
+
+```powershell
+git clone <url-рэпазіторыя>
+cd file_rename
+
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
+
+npm --prefix tools/rename-agent install
+Copy-Item .env.example .env
+```
+
+Потым адрэдагуйце `.env`:
+- задайце `READER_PYTHON` як абсалютны шлях, напрыклад `C:\path\to\file_rename\.venv\Scripts\python.exe`
+- дадайце адзін API-ключ (`OPENAI_API_KEY` або `GOOGLE_GEMINI_API_KEY`) або наладзьце Ollama
+
+Першы запуск (preview):
+
+```powershell
+npm run apply -- --dry-run --target-dir "C:\Users\<you>\Documents\documents"
+```
+
 ### Ручная ўстаноўка (пакрокава)
 
 Калі хочаце зрабіць усё самастойна:
@@ -124,7 +170,8 @@ python3 -m venv .venv
 .venv/bin/pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
 ```
 
-Актывацыя (`source .venv/bin/activate`) **не патрэбна** -- усе каманды выкарыстоўваюць шлях да Python з venv напрамую.
+Актывацыя (`source .venv/bin/activate`) **не патрэбна** -- каманды можна запускаць праз шлях да Python з venv.
+На Windows выкарыстоўвайце `.\.venv\Scripts\python.exe` замест `.venv/bin/python`.
 
 **3. Node.js-залежнасці:**
 
@@ -138,13 +185,28 @@ npm --prefix tools/rename-agent install
 cp .env.example .env
 ```
 
-Адрэдагуйце `.env` -- дадайце API-ключ і пропішыце абсалютны шлях да Python з venv у `READER_PYTHON`.
+Для Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Адрэдагуйце `.env` -- дадайце API-ключ і задайце `READER_PYTHON`:
+- прыклад macOS/Linux: `/absolute/path/to/file_rename/.venv/bin/python`
+- прыклад Windows: `C:\absolute\path\to\file_rename\.venv\Scripts\python.exe`
 
 **5. Праверка:**
 
 ```bash
 .venv/bin/python tools/read_document.py --help
 npm run apply -- --dry-run --limit 1 --target-dir ~/Desktop
+```
+
+Эквівалент для Windows:
+
+```powershell
+.\.venv\Scripts\python.exe tools/read_document.py --help
+npm run apply -- --dry-run --limit 1 --target-dir "C:\Users\<you>\Desktop"
 ```
 
 ---
@@ -196,7 +258,9 @@ VISION_MODEL=gpt-4o
 # VISION_MODEL=gemma3:4b
 ```
 
-`setup.sh` аўтаматычна прапісвае `READER_PYTHON` пры стварэнні `.env`. Калі ўсталёўвалі ўручную -- пропішыце абсалютны шлях да `.venv/bin/python` у вашым праекце.
+`setup.sh` аўтаматычна прапісвае `READER_PYTHON` пры стварэнні `.env` (macOS/Linux). Калі ўсталёўвалі ўручную, задайце абсалютны шлях:
+- macOS/Linux: `<project>/.venv/bin/python`
+- Windows: `<project>\.venv\Scripts\python.exe`
 
 ---
 
@@ -312,12 +376,24 @@ npm run apply -- --target-dir ~/Documents/invoices
 npm run apply -- --target-dir /Volumes/USB/documents
 ```
 
+Прыклад для Windows:
+
+```powershell
+npm run apply -- --target-dir "C:\Users\<you>\Documents\scans"
+```
+
 ### Змяненне `TARGET_DIR` у `.env`
 
 Адрэдагуйце `.env`:
 
 ```env
 TARGET_DIR=~/Documents/my-docs
+```
+
+Прыклад для Windows:
+
+```env
+TARGET_DIR=C:\Users\<you>\Documents\my-docs
 ```
 
 Тады дастаткова проста:
@@ -327,6 +403,8 @@ npm run apply
 ```
 
 ### Shell-аліас (для частага выкарыстання)
+
+Гэта зручнасць для Unix shell (`zsh`/`bash`). На Windows зрабіце аналаг праз функцыю/аліас у профілі PowerShell.
 
 Дадайце ў `~/.zshrc` або `~/.bashrc`:
 
@@ -652,6 +730,10 @@ OCR не змог распазнаць тэкст. Магчымыя прычын
 - Дакумент на мове, якая не ўключана ў `OCR_LANG`
 
 Рашэнне: `brew install tesseract-lang` і праверце `OCR_LANG` у `.env`.
+Таксама ўсталюйце моўныя пакеты для вашай АС:
+- macOS: `brew install tesseract-lang`
+- Linux (Ubuntu/Debian): `sudo apt install -y tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-rus`
+- Windows: дадайце `eng`, `pol`, `rus` файлы даных у тэчку ўстаноўкі Tesseract
 
 ### Агент не бачыць файлы
 
@@ -681,8 +763,20 @@ OCR не змог распазнаць тэкст. Магчымыя прычын
 .venv/bin/python -c "import pdfplumber, pytesseract, fitz; print('OK')"
 ```
 
+Эквівалент для Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import pdfplumber, pytesseract, fitz; print('OK')"
+```
+
 Калі нешта не ўсталявана -- даўсталюйце:
 
 ```bash
 .venv/bin/pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
+```
+
+Эквівалент для Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
 ```

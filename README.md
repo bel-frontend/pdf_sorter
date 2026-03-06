@@ -12,18 +12,19 @@ The agent reads the content of each file (text or OCR), sends it to a language m
 
 1. [Supported Models (Quick)](#supported-models-quick)
 2. [Requirements](#requirements)
-3. [Installation and Setup](#installation-and-setup)
-4. [Configuration (.env)](#configuration-env)
-5. [Running the Renamer](#running-the-renamer)
-6. [Running with Different Folders](#running-with-different-folders)
-7. [Sorting Files by Category](#sorting-files-by-category)
-8. [Reading Documents (OCR)](#reading-documents-ocr)
-9. [All Command-Line Parameters](#all-command-line-parameters)
-10. [Naming Rules](#naming-rules)
-11. [Output Files](#output-files)
-12. [Ignore List and Resuming Work](#ignore-list-and-resuming-work)
-13. [Usage Examples](#usage-examples)
-14. [Questions and Troubleshooting](#questions-and-troubleshooting)
+3. [Step-by-Step Workflow (Recommended)](#step-by-step-workflow-recommended)
+4. [Installation and Setup](#installation-and-setup)
+5. [Configuration (.env)](#configuration-env)
+6. [Running the Renamer](#running-the-renamer)
+7. [Running with Different Folders](#running-with-different-folders)
+8. [Sorting Files by Category](#sorting-files-by-category)
+9. [Reading Documents (OCR)](#reading-documents-ocr)
+10. [All Command-Line Parameters](#all-command-line-parameters)
+11. [Naming Rules](#naming-rules)
+12. [Output Files](#output-files)
+13. [Ignore List and Resuming Work](#ignore-list-and-resuming-work)
+14. [Usage Examples](#usage-examples)
+15. [Questions and Troubleshooting](#questions-and-troubleshooting)
 
 ---
 
@@ -56,20 +57,26 @@ Ollama:
 
 ### System Dependencies
 
-| Dependency | Purpose | Installation (macOS) |
-|---|---|---|
-| **Node.js** (>=18) | Main agent runtime | `brew install node` |
-| **Python 3.10+** | OCR and PDF reading | `brew install python` |
-| **Tesseract OCR** | Text recognition from images | `brew install tesseract` |
-| **Poppler** | Converting PDF to images for OCR | `brew install poppler` |
+| Dependency | Purpose | macOS | Linux (Ubuntu/Debian) | Windows |
+|---|---|---|---|---|
+| **Node.js** (>=18) | Main agent runtime | `brew install node` | `sudo apt update && sudo apt install -y nodejs npm` | Install Node.js LTS from https://nodejs.org |
+| **Python 3.10+** | OCR and PDF reading | `brew install python` | `sudo apt install -y python3 python3-venv python3-pip` | Install Python 3.10+ from https://python.org (check "Add Python to PATH") |
+| **Tesseract OCR** | Text recognition from images | `brew install tesseract` | `sudo apt install -y tesseract-ocr` | Install via `winget install UB-Mannheim.TesseractOCR` |
+| **Poppler** | Converting PDF to images for OCR | `brew install poppler` | `sudo apt install -y poppler-utils` | Install via `winget install oschwartz10612.Poppler` or add `poppler/bin` to PATH manually |
 
 ### Tesseract Language Packs
 
 For working with English, Polish, and Russian documents:
 
 ```bash
+# macOS
 brew install tesseract-lang
+
+# Linux (Ubuntu/Debian)
+sudo apt install -y tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-rus
 ```
+
+On Windows, install additional language data in your Tesseract installation and set `OCR_LANG` in `.env` (example: `pol+eng+rus`).
 
 ### API Keys (at least one)
 
@@ -79,9 +86,23 @@ brew install tesseract-lang
 
 ---
 
+## Step-by-Step Workflow (Recommended)
+
+Use this order if you run the tool for the first time:
+
+1. Install system dependencies from [Requirements](#requirements) for your OS.
+2. Run [Installation and Setup](#installation-and-setup) (quick start or manual).
+3. Fill in API settings in [Configuration (.env)](#configuration-env).
+4. Do a safe preview run from [Running the Renamer](#running-the-renamer) with `--dry-run`.
+5. Run without `--dry-run` to apply renaming.
+6. Optionally run [Sorting Files by Category](#sorting-files-by-category).
+7. If OCR/model issues appear, check [Questions and Troubleshooting](#questions-and-troubleshooting).
+
+---
+
 ## Installation and Setup
 
-### Quick Start (3 steps)
+### Quick Start (macOS/Linux)
 
 ```bash
 git clone <repository-url>
@@ -106,6 +127,31 @@ Done. You can now run:
 npm run apply -- --dry-run --target-dir ~/Desktop/documents
 ```
 
+### Quick Start (Windows, PowerShell)
+
+`setup.sh` is a Unix shell script, so on Windows use manual setup in PowerShell:
+
+```powershell
+git clone <repository-url>
+cd file_rename
+
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
+
+npm --prefix tools/rename-agent install
+Copy-Item .env.example .env
+```
+
+Then edit `.env`:
+- set `READER_PYTHON` to the absolute path, for example `C:\path\to\file_rename\.venv\Scripts\python.exe`
+- add one API key (`OPENAI_API_KEY` or `GOOGLE_GEMINI_API_KEY`) or configure Ollama
+
+First run (preview):
+
+```powershell
+npm run apply -- --dry-run --target-dir "C:\Users\<you>\Documents\documents"
+```
+
 ### Manual Installation (step by step)
 
 If you want to do everything yourself:
@@ -124,7 +170,8 @@ python3 -m venv .venv
 .venv/bin/pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
 ```
 
-Activation (`source .venv/bin/activate`) is **not required** -- all commands use the path to the venv Python directly.
+Activation (`source .venv/bin/activate`) is **not required** -- commands can use the venv Python path directly.
+On Windows, use `.\.venv\Scripts\python.exe` instead of `.venv/bin/python`.
 
 **3. Node.js dependencies:**
 
@@ -138,13 +185,28 @@ npm --prefix tools/rename-agent install
 cp .env.example .env
 ```
 
-Edit `.env` -- add your API key and set the absolute path to the venv Python in `READER_PYTHON`.
+On Windows PowerShell, use:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Edit `.env` -- add your API key and set `READER_PYTHON`:
+- macOS/Linux example: `/absolute/path/to/file_rename/.venv/bin/python`
+- Windows example: `C:\absolute\path\to\file_rename\.venv\Scripts\python.exe`
 
 **5. Verification:**
 
 ```bash
 .venv/bin/python tools/read_document.py --help
 npm run apply -- --dry-run --limit 1 --target-dir ~/Desktop
+```
+
+Windows equivalent:
+
+```powershell
+.\.venv\Scripts\python.exe tools/read_document.py --help
+npm run apply -- --dry-run --limit 1 --target-dir "C:\Users\<you>\Desktop"
 ```
 
 ---
@@ -196,7 +258,9 @@ VISION_MODEL=gpt-4o
 # VISION_MODEL=gemma3:4b
 ```
 
-`setup.sh` automatically sets `READER_PYTHON` when creating `.env`. If you installed manually, set the absolute path to `.venv/bin/python` in your project.
+`setup.sh` automatically sets `READER_PYTHON` when creating `.env` (macOS/Linux). If you installed manually, set an absolute path:
+- macOS/Linux: `<project>/.venv/bin/python`
+- Windows: `<project>\.venv\Scripts\python.exe`
 
 ---
 
@@ -312,12 +376,24 @@ npm run apply -- --target-dir ~/Documents/invoices
 npm run apply -- --target-dir /Volumes/USB/documents
 ```
 
+Windows example:
+
+```powershell
+npm run apply -- --target-dir "C:\Users\<you>\Documents\scans"
+```
+
 ### Setting `TARGET_DIR` in `.env`
 
 Edit `.env`:
 
 ```env
 TARGET_DIR=~/Documents/my-docs
+```
+
+Windows example:
+
+```env
+TARGET_DIR=C:\Users\<you>\Documents\my-docs
 ```
 
 Then simply run:
@@ -327,6 +403,8 @@ npm run apply
 ```
 
 ### Shell Alias (for frequent use)
+
+This is a Unix shell convenience (`zsh`/`bash`). On Windows, create a PowerShell function/profile alias instead.
 
 Add to `~/.zshrc` or `~/.bashrc`:
 
@@ -652,6 +730,10 @@ OCR could not recognize the text. Possible causes:
 - The document is in a language not included in `OCR_LANG`
 
 Solution: run `brew install tesseract-lang` and check `OCR_LANG` in `.env`.
+Also install language packs for your OS:
+- macOS: `brew install tesseract-lang`
+- Linux (Ubuntu/Debian): `sudo apt install -y tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-rus`
+- Windows: add `eng`, `pol`, `rus` data files to your Tesseract installation folder
 
 ### The agent does not see the files
 
@@ -681,8 +763,20 @@ To verify that the venv works:
 .venv/bin/python -c "import pdfplumber, pytesseract, fitz; print('OK')"
 ```
 
+Windows equivalent:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import pdfplumber, pytesseract, fitz; print('OK')"
+```
+
 If something is not installed, add it:
 
 ```bash
 .venv/bin/pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
+```
+
+Windows equivalent:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pdfplumber pytesseract Pillow pdf2image PyMuPDF
 ```
