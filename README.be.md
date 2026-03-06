@@ -6,6 +6,27 @@
 
 Агент чытае змесціва кожнага файла (тэкст або OCR), адпраўляе яго ў моўную мадэль і атрымлівае прапанову новай назвы ў фармаце `<category>_<topic>_<date>.pdf`.
 
+## Хуткія флагі па рэжымах
+
+Цяпер усе рэжымы выкарыстоўваюць аднолькавыя флагі запуску:
+- `--dry-run` для прагляду (па змаўчанні)
+- `--apply` для рэальных змен
+
+| Рэжым | Каманда | Тыповыя дадатковыя флагі |
+|---|---|---|
+| rename all | `npm run apply -- ...` | `--include`, `--lang`, `--model`, `--limit` |
+| rename па тыпе | `npm run apply:pdf -- ...`, `npm run apply:photos -- ...`, `npm run apply:docs -- ...` | `--model`, `--limit` |
+| organize | `npm run organize -- ...` | `--out-dir`, `--limit` |
+| organize smart | `npm run organize:smart -- ...` | `--model`, `--out-dir`, `--limit` |
+
+Прыклады:
+```bash
+npm run apply -- --target-dir ~/docs --dry-run
+npm run apply:pdf -- --target-dir ~/docs --apply
+npm run organize -- --target-dir ~/docs --dry-run
+npm run organize:smart -- --target-dir ~/docs --apply --model gpt-5-mini
+```
+
 ---
 
 ## Змест
@@ -275,22 +296,22 @@ VISION_MODEL=gpt-4o
 npm run apply -- --dry-run --target-dir ~/Desktop/documents
 
 # Рэальнае перайменаванне
-npm run apply -- --target-dir ~/Desktop/documents
+npm run apply -- --target-dir ~/Desktop/documents --apply
 ```
 
-Нагадванне: `npm run apply` ужо ўключае сцяг `--apply`, таму файлы будуць перайменаваны. Дадайце `--dry-run`, каб толькі пабачыць план.
+Нагадванне: `npm run apply` па змаўчанні працуе ў `--dry-run`. Для рэальнага перайменавання дадайце `--apply`.
 
 ### Выбар мадэлі
 
 ```bash
 # OpenAI
-npm run apply -- --target-dir ~/docs --model gpt-4o-mini
+npm run apply -- --target-dir ~/docs --model gpt-4o-mini --apply
 
 # Google Gemini
-npm run apply -- --target-dir ~/docs --model gemini-2.5-pro
+npm run apply -- --target-dir ~/docs --model gemini-2.5-pro --apply
 
 # Лакальная мадэль Ollama (без інтэрнэту)
-npm run apply -- --target-dir ~/docs --model gpt-oss:20b
+npm run apply -- --target-dir ~/docs --model gpt-oss:20b --apply
 ```
 
 ### Мова назваў
@@ -299,16 +320,16 @@ npm run apply -- --target-dir ~/docs --model gpt-oss:20b
 
 ```bash
 # Англійская (па змаўчанні)
-npm run apply -- --target-dir ~/docs --lang en
+npm run apply -- --target-dir ~/docs --lang en --apply
 
 # Польская
-npm run apply -- --target-dir ~/docs --lang pl
+npm run apply -- --target-dir ~/docs --lang pl --apply
 
 # Беларуская (транслітарацыя)
-npm run apply -- --target-dir ~/docs --lang be
+npm run apply -- --target-dir ~/docs --lang be --apply
 
 # Руская (транслітарацыя)
-npm run apply -- --target-dir ~/docs --lang ru
+npm run apply -- --target-dir ~/docs --lang ru --apply
 ```
 
 Або задаць у `.env` каб не перадаваць кожны раз:
@@ -321,7 +342,7 @@ NAMING_LANG=en
 
 ```bash
 # Апрацаваць толькі першыя 10 файлаў (добра для тэсту)
-npm run apply -- --target-dir ~/docs --limit 10
+npm run apply -- --target-dir ~/docs --limit 10 --apply
 ```
 
 ### Фільтрацыя па тыпе файлаў
@@ -343,14 +364,14 @@ npm run apply:docs -- --target-dir ~/docs
 
 ```bash
 # Прасэт
-npm run apply -- --target-dir ~/docs --include pdf
-npm run apply -- --target-dir ~/docs --include photos
+npm run apply -- --target-dir ~/docs --include pdf --apply
+npm run apply -- --target-dir ~/docs --include photos --apply
 
 # Некалькі прасэтаў разам
-npm run apply -- --target-dir ~/docs --include pdf,photos
+npm run apply -- --target-dir ~/docs --include pdf,photos --apply
 
 # Кастомны glob
-npm run apply -- --target-dir ~/docs --include "**/*.{pdf,png}"
+npm run apply -- --target-dir ~/docs --include "**/*.{pdf,png}" --apply
 ```
 
 Даступныя прасэты:
@@ -371,15 +392,15 @@ npm run apply -- --target-dir ~/docs --include "**/*.{pdf,png}"
 Перадайце шлях да любой папкі:
 
 ```bash
-npm run apply -- --target-dir ~/Desktop/scans
-npm run apply -- --target-dir ~/Documents/invoices
-npm run apply -- --target-dir /Volumes/USB/documents
+npm run apply -- --target-dir ~/Desktop/scans --apply
+npm run apply -- --target-dir ~/Documents/invoices --apply
+npm run apply -- --target-dir /Volumes/USB/documents --apply
 ```
 
 Прыклад для Windows:
 
 ```powershell
-npm run apply -- --target-dir "C:\Users\<you>\Documents\scans"
+npm run apply -- --target-dir "C:\Users\<you>\Documents\scans" --apply
 ```
 
 ### Змяненне `TARGET_DIR` у `.env`
@@ -632,15 +653,15 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 
 ```bash
 # Працягнуць з месца спынення
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Прымусіць пераапрацоўку ўсіх файлаў
 rm ./.rename-agent-ignore-rename.txt
 rm ./.rename-agent-ignore-organize.txt
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Не абнаўляць ignore-ліст (разавы прагон)
-npm run apply -- --target-dir ~/docs --no-update-ignore-list
+npm run apply -- --target-dir ~/docs --no-update-ignore-list --apply
 ```
 
 ---
@@ -660,7 +681,7 @@ npm run apply -- --dry-run --target-dir ~/Desktop/documents
 ### Прыклад 2: Перайменаваць усе дакументы
 
 ```bash
-npm run apply -- --target-dir ~/Desktop/documents
+npm run apply -- --target-dir ~/Desktop/documents --apply
 ```
 
 ### Прыклад 3: Тэст на невялікай выбарцы
@@ -676,14 +697,14 @@ npm run apply -- --target-dir ~/Desktop/documents --limit 5 --dry-run
 ollama serve
 
 # Потым:
-npm run apply -- --target-dir ~/docs --model llama3.3:latest
+npm run apply -- --target-dir ~/docs --model llama3.3:latest --apply
 ```
 
 ### Прыклад 5: Поўны цыкл -- перайменаванне + сартыроўка
 
 ```bash
 # Крок 1: Перайменаваць
-npm run apply -- --target-dir ~/Desktop/my-docs
+npm run apply -- --target-dir ~/Desktop/my-docs --apply
 
 # Крок 2: Пабачыць план сартыроўкі
 npm run organize -- --target-dir ~/Desktop/my-docs --dry-run
@@ -695,7 +716,7 @@ npm run organize -- --target-dir ~/Desktop/my-docs --apply
 ### Прыклад 6: Апрацоўка знешняга дыска
 
 ```bash
-npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini
+npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini --apply
 ```
 
 ### Прыклад 7: Прачытаць адзін дакумент уручную
@@ -711,11 +732,11 @@ npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini
 
 ```bash
 # Першы запуск -- апрацуе ўсе файлы
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Пазней дадалі новыя файлы ў ~/docs -- запускаем зноў
 # Агент апрацуе толькі новыя (дзякуючы ignore-лісту)
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 ```
 
 ---

@@ -84,19 +84,28 @@ VISION_MODEL=gpt-4o
 
 ## Скрыпты
 
-- `npm run apply` — перайменаванне (з `--apply` па змаўчанні)
+- `npm run apply` — перайменаванне (dry-run па змаўчанні)
 - `npm run apply:pdf` — толькі pdf
 - `npm run apply:photos` — толькі выявы
 - `npm run apply:docs` — толькі doc/docx/xml
 - `npm run organize` — сартыроўка па ключавых словах
 - `npm run organize:smart` — LLM-класіфікацыя (тэкст + vision)
 
+## Хуткая табліца флагаў (аднолькава для рэжымаў)
+
+| Рэжым | Каманда | Агульныя флагі |
+|---|---|---|
+| rename all | `npm run apply -- ...` | `--target-dir`, `--dry-run`, `--apply`, `--model`, `--ollama-base-url`, `--limit`, `--ignore-list`, `--no-update-ignore-list` |
+| rename pdf/photos/docs | `npm run apply:pdf -- ...` / `apply:photos` / `apply:docs` | тыя ж, што і вышэй |
+| organize | `npm run organize -- ...` | `--target-dir`, `--dry-run`, `--apply`, `--model`, `--ollama-base-url`, `--limit`, `--ignore-list`, `--no-update-ignore-list`, `--out-dir` |
+| organize smart | `npm run organize:smart -- ...` | тыя ж, што ў `organize` (`--smart` уключаны скрыптам) |
+
 ## Флагі: `apply`
 
 | Флаг | Апісанне | Па змаўчанні |
 |---|---|---|
 | `--target-dir <path>` | Каранёвая папка для сканавання | `TARGET_DIR` з `.env` |
-| `--apply` | Рэальныя змены (не dry-run) | `false` (акрамя `npm run apply`) |
+| `--apply` | Рэальныя змены (не dry-run) | `false` |
 | `--dry-run` | Толькі план, без перайменавання | `true` |
 | `--model <name>` | Мадэль са спісу вышэй | `LLM_MODEL`/`OPENAI_MODEL`/... |
 | `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
@@ -128,7 +137,7 @@ VISION_MODEL=gpt-4o
 npm --prefix tools/rename-agent run apply -- --dry-run --target-dir /Users/serj/Downloads --model gpt-4o-mini
 
 # Apply real
-npm --prefix tools/rename-agent run apply -- --target-dir /Users/serj/Downloads --model gpt-5-mini
+npm --prefix tools/rename-agent run apply -- --target-dir /Users/serj/Downloads --model gpt-5-mini --apply
 
 # Organize by keywords
 npm --prefix tools/rename-agent run organize -- --target-dir /Users/serj/Downloads --dry-run

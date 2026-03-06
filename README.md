@@ -6,6 +6,27 @@ A tool for intelligent renaming and organization of PDF files, document photos, 
 
 The agent reads the content of each file (text or OCR), sends it to a language model, and receives a suggested new name in the format `<category>_<subject>_<date>.pdf`.
 
+## Quick Flags By Mode
+
+All modes now use the same execution flags:
+- `--dry-run` for preview (default)
+- `--apply` for real changes
+
+| Mode | Command | Typical extra flags |
+|---|---|---|
+| rename all | `npm run apply -- ...` | `--include`, `--lang`, `--model`, `--limit` |
+| rename by type | `npm run apply:pdf -- ...`, `npm run apply:photos -- ...`, `npm run apply:docs -- ...` | `--model`, `--limit` |
+| organize | `npm run organize -- ...` | `--out-dir`, `--limit` |
+| organize smart | `npm run organize:smart -- ...` | `--model`, `--out-dir`, `--limit` |
+
+Examples:
+```bash
+npm run apply -- --target-dir ~/docs --dry-run
+npm run apply:pdf -- --target-dir ~/docs --apply
+npm run organize -- --target-dir ~/docs --dry-run
+npm run organize:smart -- --target-dir ~/docs --apply --model gpt-5-mini
+```
+
 ---
 
 ## Table of Contents
@@ -275,22 +296,22 @@ All commands are run from the project root.
 npm run apply -- --dry-run --target-dir ~/Desktop/documents
 
 # Actual renaming
-npm run apply -- --target-dir ~/Desktop/documents
+npm run apply -- --target-dir ~/Desktop/documents --apply
 ```
 
-Note: `npm run apply` already includes the `--apply` flag, so files will be renamed. Add `--dry-run` to only see the plan.
+Note: `npm run apply` is dry-run by default. Add `--apply` for real renaming.
 
 ### Choosing a Model
 
 ```bash
 # OpenAI
-npm run apply -- --target-dir ~/docs --model gpt-4o-mini
+npm run apply -- --target-dir ~/docs --model gpt-4o-mini --apply
 
 # Google Gemini
-npm run apply -- --target-dir ~/docs --model gemini-2.5-pro
+npm run apply -- --target-dir ~/docs --model gemini-2.5-pro --apply
 
 # Local Ollama model (offline)
-npm run apply -- --target-dir ~/docs --model gpt-oss:20b
+npm run apply -- --target-dir ~/docs --model gpt-oss:20b --apply
 ```
 
 ### Naming Language
@@ -299,16 +320,16 @@ By default, names are generated in English. You can change this with `--lang`:
 
 ```bash
 # English (default, no flag needed)
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Polish
-npm run apply -- --target-dir ~/docs --lang pl
+npm run apply -- --target-dir ~/docs --lang pl --apply
 
 # Belarusian (transliteration)
-npm run apply -- --target-dir ~/docs --lang be
+npm run apply -- --target-dir ~/docs --lang be --apply
 
 # Russian (transliteration)
-npm run apply -- --target-dir ~/docs --lang ru
+npm run apply -- --target-dir ~/docs --lang ru --apply
 ```
 
 Or set it in `.env` so you do not have to pass it every time:
@@ -321,7 +342,7 @@ NAMING_LANG=en
 
 ```bash
 # Process only the first 10 files (good for testing)
-npm run apply -- --target-dir ~/docs --limit 10
+npm run apply -- --target-dir ~/docs --limit 10 --apply
 ```
 
 ### Filtering by File Type
@@ -343,14 +364,14 @@ Or via the `--include` parameter with a preset or custom glob:
 
 ```bash
 # Preset
-npm run apply -- --target-dir ~/docs --include pdf
-npm run apply -- --target-dir ~/docs --include photos
+npm run apply -- --target-dir ~/docs --include pdf --apply
+npm run apply -- --target-dir ~/docs --include photos --apply
 
 # Multiple presets together
-npm run apply -- --target-dir ~/docs --include pdf,photos
+npm run apply -- --target-dir ~/docs --include pdf,photos --apply
 
 # Custom glob
-npm run apply -- --target-dir ~/docs --include "**/*.{pdf,png}"
+npm run apply -- --target-dir ~/docs --include "**/*.{pdf,png}" --apply
 ```
 
 Available presets:
@@ -371,15 +392,15 @@ Available presets:
 Pass the path to any folder:
 
 ```bash
-npm run apply -- --target-dir ~/Desktop/scans
-npm run apply -- --target-dir ~/Documents/invoices
-npm run apply -- --target-dir /Volumes/USB/documents
+npm run apply -- --target-dir ~/Desktop/scans --apply
+npm run apply -- --target-dir ~/Documents/invoices --apply
+npm run apply -- --target-dir /Volumes/USB/documents --apply
 ```
 
 Windows example:
 
 ```powershell
-npm run apply -- --target-dir "C:\Users\<you>\Documents\scans"
+npm run apply -- --target-dir "C:\Users\<you>\Documents\scans" --apply
 ```
 
 ### Setting `TARGET_DIR` in `.env`
@@ -632,15 +653,15 @@ This means:
 
 ```bash
 # Resume from where you left off
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Force reprocessing of all files
 rm ./.rename-agent-ignore-rename.txt
 rm ./.rename-agent-ignore-organize.txt
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Do not update the ignore list (one-time run)
-npm run apply -- --target-dir ~/docs --no-update-ignore-list
+npm run apply -- --target-dir ~/docs --no-update-ignore-list --apply
 ```
 
 ---
@@ -660,7 +681,7 @@ The output will show the suggested name, type, date, and confidence level for ea
 ### Example 2: Rename All Documents
 
 ```bash
-npm run apply -- --target-dir ~/Desktop/documents
+npm run apply -- --target-dir ~/Desktop/documents --apply
 ```
 
 ### Example 3: Test on a Small Sample
@@ -676,14 +697,14 @@ npm run apply -- --target-dir ~/Desktop/documents --limit 5 --dry-run
 ollama serve
 
 # Then:
-npm run apply -- --target-dir ~/docs --model llama3.3:latest
+npm run apply -- --target-dir ~/docs --model llama3.3:latest --apply
 ```
 
 ### Example 5: Full Cycle -- Rename + Sort
 
 ```bash
 # Step 1: Rename
-npm run apply -- --target-dir ~/Desktop/my-docs
+npm run apply -- --target-dir ~/Desktop/my-docs --apply
 
 # Step 2: Preview the sorting plan
 npm run organize -- --target-dir ~/Desktop/my-docs --dry-run
@@ -695,7 +716,7 @@ npm run organize -- --target-dir ~/Desktop/my-docs --apply
 ### Example 6: Processing an External Drive
 
 ```bash
-npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini
+npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini --apply
 ```
 
 ### Example 7: Read a Single Document Manually
@@ -711,11 +732,11 @@ npm run apply -- --target-dir /Volumes/MyUSB/scans --model gpt-4o-mini
 
 ```bash
 # First run -- processes all files
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 
 # Later, new files are added to ~/docs -- run again
 # The agent will process only the new ones (thanks to the ignore list)
-npm run apply -- --target-dir ~/docs
+npm run apply -- --target-dir ~/docs --apply
 ```
 
 ---
