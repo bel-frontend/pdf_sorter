@@ -30,7 +30,8 @@ export function parseArgs(argv) {
     ],
     lang: (process.env.NAMING_LANG || "en").toLowerCase(),
     limit: 0,
-    ignoreListPath: process.env.IGNORE_LIST_PATH || "",
+    ignoreListPath:
+      process.env.RENAME_IGNORE_LIST_PATH || process.env.IGNORE_LIST_PATH || "",
     updateIgnoreList:
       String(process.env.UPDATE_IGNORE_LIST || "true").toLowerCase() !==
       "false",
@@ -60,7 +61,10 @@ export function parseArgs(argv) {
   }
 
   if (!args.ignoreListPath) {
-    args.ignoreListPath = path.join(projectRoot, ".rename-agent-ignore.txt");
+    args.ignoreListPath = path.join(
+      projectRoot,
+      ".rename-agent-ignore-rename.txt",
+    );
   } else if (!path.isAbsolute(args.ignoreListPath)) {
     args.ignoreListPath = path.resolve(projectRoot, args.ignoreListPath);
   }

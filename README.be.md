@@ -10,19 +10,45 @@
 
 ## Змест
 
-1. [Патрабаванні](#патрабаванні)
-2. [Устаноўка і разгортванне](#устаноўка-і-разгортванне)
-3. [Канфігурацыя (.env)](#канфігурацыя-env)
-4. [Запуск перайменавання](#запуск-перайменавання)
-5. [Запуск з рознымі папкамі](#запуск-з-рознымі-папкамі)
-6. [Сартыроўка файлаў па катэгорыях](#сартыроўка-файлаў-па-катэгорыях)
-7. [Чытанне дакументаў (OCR)](#чытанне-дакументаў-ocr)
-8. [Усе параметры каманднага радка](#усе-параметры-каманднага-радка)
-9. [Правілы наймення](#правілы-наймення)
-10. [Вынікі працы](#вынікі-працы)
-11. [Ignore-ліст і працяг працы](#ignore-ліст-і-працяг-працы)
-12. [Прыклады выкарыстання](#прыклады-выкарыстання)
-13. [Пытанні і праблемы](#пытанні-і-праблемы)
+1. [Падтрымліваемыя мадэлі (хутка)](#падтрымліваемыя-мадэлі-хутка)
+2. [Патрабаванні](#патрабаванні)
+3. [Устаноўка і разгортванне](#устаноўка-і-разгортванне)
+4. [Канфігурацыя (.env)](#канфігурацыя-env)
+5. [Запуск перайменавання](#запуск-перайменавання)
+6. [Запуск з рознымі папкамі](#запуск-з-рознымі-папкамі)
+7. [Сартыроўка файлаў па катэгорыях](#сартыроўка-файлаў-па-катэгорыях)
+8. [Чытанне дакументаў (OCR)](#чытанне-дакументаў-ocr)
+9. [Усе параметры каманднага радка](#усе-параметры-каманднага-радка)
+10. [Правілы наймення](#правілы-наймення)
+11. [Вынікі працы](#вынікі-працы)
+12. [Ignore-ліст і працяг працы](#ignore-ліст-і-працяг-працы)
+13. [Прыклады выкарыстання](#прыклады-выкарыстання)
+14. [Пытанні і праблемы](#пытанні-і-праблемы)
+
+---
+
+## Падтрымліваемыя мадэлі (хутка)
+
+OpenAI:
+- `gpt-4o`
+- `gpt-4o-mini`
+- `gpt-4.1-2025-04-14`
+- `gpt-4.1-nano`
+- `gpt-5`
+- `gpt-5.1`
+- `gpt-5-mini`
+- `gpt-5-nano`
+
+Google:
+- `gemini-2.5-pro`
+
+Ollama:
+- `llama3.2`
+- `mistral-small3.1`
+- `llama3.3:latest`
+- `gemma3:4b`
+- `gemma3:12b`
+- `gpt-oss:20b`
 
 ---
 
@@ -148,8 +174,14 @@ GOOGLE_MODEL=gemini-2.5-pro
 # --- Агульныя налады ---
 TARGET_DIR=                   # пуста = абавязкова перадаваць --target-dir
 DRY_RUN=true                 # true = толькі прагляд, false = рэальнае перайменаванне
-IGNORE_LIST_PATH=             # пуста = аўтаматычна ў TARGET_DIR
+# rename-flow ignore list (apply)
+RENAME_IGNORE_LIST_PATH=
+# backward-compatible alias for rename-flow ignore list
+IGNORE_LIST_PATH=
 UPDATE_IGNORE_LIST=true
+# organize-flow ignore list (organize / organize:smart)
+ORGANIZE_IGNORE_LIST_PATH=
+ORGANIZE_UPDATE_IGNORE_LIST=true
 
 # --- Мова назваў ---
 NAMING_LANG=en                # en | pl | be | ru
@@ -433,7 +465,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--include <прасэт\|glob>` | Фільтр тыпаў файлаў: `pdf`, `photos`, `docs`, `all` або glob | `all` |
 | `--lang <код>` | Мова назваў: `en`, `pl`, `be`, `ru` | `en` |
 | `--limit <N>` | Апрацаваць толькі першыя N файлаў | `0` (усе) |
-| `--ignore-list <шлях>` | Шлях да ignore-ліста | `<project-root>/.rename-agent-ignore.txt` |
+| `--ignore-list <шлях>` | Шлях да rename ignore-ліста | `<project-root>/.rename-agent-ignore-rename.txt` |
 | `--no-update-ignore-list` | Не абнаўляць ignore-ліст | абнаўляць |
 
 ### `npm run organize` (сартыроўка)
@@ -447,6 +479,8 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--smart` | Разумная сартыроўка: аналіз кантэнту праз LLM | выключана |
 | `--model <назва>` | Мадэль LLM (для `--smart`) | тыя ж default, што і для `apply` |
 | `--limit <N>` | Абмежаваць колькасць файлаў | `0` (усе) |
+| `--ignore-list <шлях>` | Шлях да organize ignore-ліста | `<project-root>/.rename-agent-ignore-organize.txt` |
+| `--no-update-ignore-list` | Не абнаўляць organize ignore-ліст | абнаўляць |
 
 ### `.venv/bin/python tools/read_document.py` (чытанне)
 
@@ -500,24 +534,31 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 Дадаткова:
 
 - У мэтавай папцы: **`DOCUMENT_CATALOG.md`** -- аўтаматычна абнаўляемы каталог усіх файлаў
-- У корані праекта: **`.rename-agent-ignore.txt`** -- спіс ужо апрацаваных файлаў
+- У корані праекта: **`.rename-agent-ignore-rename.txt`** -- спіс ужо перайменаваных файлаў
+- У корані праекта: **`.rename-agent-ignore-organize.txt`** -- спіс ужо адсартыраваных файлаў
 
 ---
 
 ## Ignore-ліст і працяг працы
 
-Агент запісвае кожны апрацаваны файл у `.rename-agent-ignore.txt` у корані праекта. Гэта значыць:
+Агент выкарыстоўвае два ignore-лісты ў корані праекта:
+
+- `.rename-agent-ignore-rename.txt` для патоку перайменавання (`apply`)
+- `.rename-agent-ignore-organize.txt` для патоку сартыроўкі (`organize`, `organize:smart`)
+
+Гэта значыць:
 
 1. **Можна бяспечна спыніць і працягнуць** -- пры паўторным запуску агент прапусціць ужо апрацаваныя файлы
 2. **Новыя файлы аўтаматычна падхопяцца** -- дастаткова запусціць агент зноў
-3. **Каб пераапрацаваць усё** -- выдаліце `.rename-agent-ignore.txt` з кораня праекта
+3. **Каб пераапрацаваць усё** -- выдаліце адзін або абодва ignore-файлы з кораня праекта
 
 ```bash
 # Працягнуць з месца спынення
 npm run apply -- --target-dir ~/docs
 
 # Прымусіць пераапрацоўку ўсіх файлаў
-rm ./.rename-agent-ignore.txt
+rm ./.rename-agent-ignore-rename.txt
+rm ./.rename-agent-ignore-organize.txt
 npm run apply -- --target-dir ~/docs
 
 # Не абнаўляць ignore-ліст (разавы прагон)
@@ -617,7 +658,7 @@ OCR не змог распазнаць тэкст. Магчымыя прычын
 Праверце, што:
 - `--target-dir` паказвае на правільную папку
 - Файлы маюць падтрымліваемае пашырэнне (pdf, jpg, png, tiff, doc, docx, xml)
-- Файлы не ў root `.rename-agent-ignore.txt`
+- Файлы не ў root ignore-файлах (`.rename-agent-ignore-rename.txt` / `.rename-agent-ignore-organize.txt`)
 
 ### Памылка LLM/мадэлі
 

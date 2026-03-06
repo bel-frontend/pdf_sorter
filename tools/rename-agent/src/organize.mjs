@@ -1,10 +1,16 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import fg from "fast-glob";
 import { HumanMessage } from "@langchain/core/messages";
 import { extractContent } from "./extractors.mjs";
 import { buildChatModel } from "./llm.mjs";
 import { parseArgs as parseBaseArgs } from "./config.mjs";
+import { appendIgnoreEntries, readIgnoreList } from "./ignore-list.mjs";
+
+const moduleFile = fileURLToPath(import.meta.url);
+const moduleDir = path.dirname(moduleFile);
+const projectRoot = path.resolve(moduleDir, "../../..");
 
 const IMAGE_EXTS = new Set([
   ".jpg",
@@ -61,6 +67,13 @@ function parseArgs(argv) {
     model: baseConfig.model,
     ollamaBaseUrl: baseConfig.ollamaBaseUrl,
     lang: baseConfig.lang,
+    ignoreListPath:
+      process.env.ORGANIZE_IGNORE_LIST_PATH ||
+      path.join(projectRoot, ".rename-agent-ignore-organize.txt"),
+    updateIgnoreList:
+      String(
+        process.env.ORGANIZE_UPDATE_IGNORE_LIST || "true",
+      ).toLowerCase() !== "false",
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -71,9 +84,22 @@ function parseArgs(argv) {
     if (token === "--dry-run") args.dryRun = true;
     if (token === "--limit") args.limit = Number(argv[i + 1] || 0);
     if (token === "--smart") args.smart = true;
+    if (token === "--ignore-list") args.ignoreListPath = argv[i + 1];
+    if (token === "--no-update-ignore-list") args.updateIgnoreList = false;
+  }
+
+  if (!path.isAbsolute(args.ignoreListPath)) {
+    args.ignoreListPath = path.resolve(projectRoot, args.ignoreListPath);
   }
 
   return args;
+}
+
+function normalizeRelPath(p) {
+  return String(p || "")
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .trim();
 }
 
 function detectCategory(relativePath) {
@@ -406,11 +432,20 @@ async function main() {
     .map((absPath) => ({ absPath, relPath: path.relative(targetDir, absPath) }))
     .sort((a, b) => a.relPath.localeCompare(b.relPath));
 
-  const selected = args.limit > 0 ? files.slice(0, args.limit) : files;
+  const ignoredPaths = await readIgnoreList(args.ignoreListPath);
+  const filesAfterIgnore = files.filter(
+    (file) => !ignoredPaths.has(normalizeRelPath(file.relPath)),
+  );
+  const selected =
+    args.limit > 0 ? filesAfterIgnore.slice(0, args.limit) : filesAfterIgnore;
   const outputsDir = path.join(path.resolve(process.cwd()), "outputs");
   await fs.mkdir(outputsDir, { recursive: true });
   await cleanupLegacyOutputs(outputsDir);
   await cleanupTechnicalTempDirs(path.resolve(process.cwd()));
+
+  console.log(
+    `Ignore list: ${args.ignoreListPath} (${ignoredPaths.size} entries)`,
+  );
 
   let llm = null;
   let visionLlm = null;
@@ -488,6 +523,11 @@ async function main() {
       await fs.mkdir(path.dirname(op.toAbs), { recursive: true });
       await fs.rename(op.fromAbs, op.toAbs);
       console.log(`${progress} Moved: ${op.from} -> ${op.to}`);
+
+      if (args.updateIgnoreList) {
+        const processedPath = op.action === "move" ? op.to : op.from;
+        await appendIgnoreEntries(args.ignoreListPath, [processedPath]);
+      }
     }
   }
 
@@ -503,6 +543,7 @@ async function main() {
         dryRun: args.dryRun,
         totalScanned: files.length,
         totalSelected: selected.length,
+        totalIgnored: files.length - filesAfterIgnore.length,
         totalMove: toMove.length,
         operations: operations.map(({ fromAbs, toAbs, ...rest }) => rest),
       },
@@ -519,6 +560,7 @@ async function main() {
   );
 
   console.log(`Scanned: ${files.length}`);
+  console.log(`Ignored by list: ${files.length - filesAfterIgnore.length}`);
   console.log(`Selected: ${selected.length}`);
   console.log(`Move operations: ${toMove.length}`);
   console.log(`Mode: ${args.dryRun ? "dry-run" : "apply"}`);

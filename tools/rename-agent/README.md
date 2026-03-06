@@ -62,8 +62,14 @@ GOOGLE_MODEL=gemini-2.5-pro
 # Runtime
 TARGET_DIR=
 DRY_RUN=true
+# rename-flow ignore list (apply)
+RENAME_IGNORE_LIST_PATH=
+# backward-compatible alias for rename-flow ignore list
 IGNORE_LIST_PATH=
 UPDATE_IGNORE_LIST=true
+# organize-flow ignore list (organize / organize:smart)
+ORGANIZE_IGNORE_LIST_PATH=
+ORGANIZE_UPDATE_IGNORE_LIST=true
 NAMING_LANG=en
 
 # OCR
@@ -96,7 +102,7 @@ VISION_MODEL=gpt-4o
 | `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
 | `--limit <n>` | Апрацаваць толькі першыя `n` файлаў | `0` (без ліміту) |
 | `--include <preset|glob>` | Фільтр файлаў (`all,pdf,photos,docs` або glob) | `all` |
-| `--ignore-list <path>` | Шлях да ignore-ліста | `<project-root>/.rename-agent-ignore.txt` |
+| `--ignore-list <path>` | Шлях да ignore-ліста (rename-flow) | `<project-root>/.rename-agent-ignore-rename.txt` |
 | `--no-update-ignore-list` | Не абнаўляць ignore-ліст | `false` |
 | `--lang <en|pl|be|ru>` | Мова для назваў | `en` |
 
@@ -112,6 +118,8 @@ VISION_MODEL=gpt-4o
 | `--smart` | Уключыць LLM-класіфікацыю | `false` (`true` у `organize:smart`) |
 | `--model <name>` | Тэкставая мадэль для smart-рэжыму | як у `apply` |
 | `--ollama-base-url <url>` | URL Ollama | `http://localhost:11434` |
+| `--ignore-list <path>` | Шлях да ignore-ліста (organize-flow) | `<project-root>/.rename-agent-ignore-organize.txt` |
+| `--no-update-ignore-list` | Не абнаўляць organize-ignore-ліст | `false` |
 
 ## Прыклады
 

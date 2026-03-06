@@ -10,19 +10,45 @@ The agent reads the content of each file (text or OCR), sends it to a language m
 
 ## Table of Contents
 
-1. [Requirements](#requirements)
-2. [Installation and Setup](#installation-and-setup)
-3. [Configuration (.env)](#configuration-env)
-4. [Running the Renamer](#running-the-renamer)
-5. [Running with Different Folders](#running-with-different-folders)
-6. [Sorting Files by Category](#sorting-files-by-category)
-7. [Reading Documents (OCR)](#reading-documents-ocr)
-8. [All Command-Line Parameters](#all-command-line-parameters)
-9. [Naming Rules](#naming-rules)
-10. [Output Files](#output-files)
-11. [Ignore List and Resuming Work](#ignore-list-and-resuming-work)
-12. [Usage Examples](#usage-examples)
-13. [Questions and Troubleshooting](#questions-and-troubleshooting)
+1. [Supported Models (Quick)](#supported-models-quick)
+2. [Requirements](#requirements)
+3. [Installation and Setup](#installation-and-setup)
+4. [Configuration (.env)](#configuration-env)
+5. [Running the Renamer](#running-the-renamer)
+6. [Running with Different Folders](#running-with-different-folders)
+7. [Sorting Files by Category](#sorting-files-by-category)
+8. [Reading Documents (OCR)](#reading-documents-ocr)
+9. [All Command-Line Parameters](#all-command-line-parameters)
+10. [Naming Rules](#naming-rules)
+11. [Output Files](#output-files)
+12. [Ignore List and Resuming Work](#ignore-list-and-resuming-work)
+13. [Usage Examples](#usage-examples)
+14. [Questions and Troubleshooting](#questions-and-troubleshooting)
+
+---
+
+## Supported Models (Quick)
+
+OpenAI:
+- `gpt-4o`
+- `gpt-4o-mini`
+- `gpt-4.1-2025-04-14`
+- `gpt-4.1-nano`
+- `gpt-5`
+- `gpt-5.1`
+- `gpt-5-mini`
+- `gpt-5-nano`
+
+Google:
+- `gemini-2.5-pro`
+
+Ollama:
+- `llama3.2`
+- `mistral-small3.1`
+- `llama3.3:latest`
+- `gemma3:4b`
+- `gemma3:12b`
+- `gpt-oss:20b`
 
 ---
 
@@ -148,8 +174,14 @@ GOOGLE_MODEL=gemini-2.5-pro
 # --- General Settings ---
 TARGET_DIR=                   # empty = must pass --target-dir
 DRY_RUN=true                 # true = preview only, false = actual renaming
-IGNORE_LIST_PATH=             # empty = automatically in TARGET_DIR
+# rename-flow ignore list (apply)
+RENAME_IGNORE_LIST_PATH=
+# backward-compatible alias for rename-flow ignore list
+IGNORE_LIST_PATH=
 UPDATE_IGNORE_LIST=true
+# organize-flow ignore list (organize / organize:smart)
+ORGANIZE_IGNORE_LIST_PATH=
+ORGANIZE_UPDATE_IGNORE_LIST=true
 
 # --- Naming Language ---
 NAMING_LANG=en                # en | pl | be | ru
@@ -433,7 +465,7 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--include <preset\|glob>` | File type filter: `pdf`, `photos`, `docs`, `all`, or glob | `all` |
 | `--lang <code>` | Naming language: `en`, `pl`, `be`, `ru` | `en` |
 | `--limit <N>` | Process only the first N files | `0` (all) |
-| `--ignore-list <path>` | Path to the ignore list | `<project-root>/.rename-agent-ignore.txt` |
+| `--ignore-list <path>` | Path to rename ignore list | `<project-root>/.rename-agent-ignore-rename.txt` |
 | `--no-update-ignore-list` | Do not update the ignore list | update |
 
 ### `npm run organize` (sorting)
@@ -447,6 +479,8 @@ PDF, JPG/JPEG, PNG, TIFF/TIF, BMP, WebP, GIF, DOC, DOCX, XML
 | `--smart` | Smart sorting: content analysis via LLM | disabled |
 | `--model <name>` | LLM model (for `--smart`) | same defaults as `apply` |
 | `--limit <N>` | Limit the number of files | `0` (all) |
+| `--ignore-list <path>` | Path to organize ignore list | `<project-root>/.rename-agent-ignore-organize.txt` |
+| `--no-update-ignore-list` | Do not update organize ignore list | update |
 
 ### `.venv/bin/python tools/read_document.py` (reading)
 
@@ -500,24 +534,31 @@ After running, the agent creates files in `tools/rename-agent/outputs/`:
 Additionally:
 
 - In target folder: **`DOCUMENT_CATALOG.md`** -- automatically updated catalog of all files
-- In project root: **`.rename-agent-ignore.txt`** -- list of already processed files
+- In project root: **`.rename-agent-ignore-rename.txt`** -- list of already renamed files
+- In project root: **`.rename-agent-ignore-organize.txt`** -- list of already organized files
 
 ---
 
 ## Ignore List and Resuming Work
 
-The agent records every processed file in `.rename-agent-ignore.txt` in project root. This means:
+The agent uses two ignore lists in project root:
+
+- `.rename-agent-ignore-rename.txt` for rename flow (`apply`)
+- `.rename-agent-ignore-organize.txt` for organize flow (`organize`, `organize:smart`)
+
+This means:
 
 1. **You can safely stop and resume** -- on the next run, the agent will skip already processed files
 2. **New files are picked up automatically** -- just run the agent again
-3. **To reprocess everything** -- delete `.rename-agent-ignore.txt` from the project root
+3. **To reprocess everything** -- delete one or both ignore files from project root
 
 ```bash
 # Resume from where you left off
 npm run apply -- --target-dir ~/docs
 
 # Force reprocessing of all files
-rm ./.rename-agent-ignore.txt
+rm ./.rename-agent-ignore-rename.txt
+rm ./.rename-agent-ignore-organize.txt
 npm run apply -- --target-dir ~/docs
 
 # Do not update the ignore list (one-time run)
@@ -617,7 +658,7 @@ Solution: run `brew install tesseract-lang` and check `OCR_LANG` in `.env`.
 Check that:
 - `--target-dir` points to the correct folder
 - Files have a supported extension (pdf, jpg, png, tiff, doc, docx, xml)
-- Files are not listed in the root `.rename-agent-ignore.txt`
+- Files are not listed in root ignore files (`.rename-agent-ignore-rename.txt` / `.rename-agent-ignore-organize.txt`)
 
 ### LLM/model error
 
