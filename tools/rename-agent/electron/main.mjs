@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
+import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   app,
   BrowserWindow,
@@ -29,6 +30,10 @@ import {
   undoLastOperation,
   writeLastOperation,
 } from "../src/desktop/history.mjs";
+import {
+  ensureDriveFolder,
+  uploadSortedOperations,
+} from "../src/desktop/google-drive.mjs";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CATEGORIES = [
@@ -147,10 +152,11 @@ async function readSettings() {
   }
   const detectedPython = await findProjectPython();
   const storedPython = stored.readerPython || "";
+  const storedPythonExists = storedPython ? await exists(storedPython) : false;
   const readerPython =
-    storedPython && storedPython !== "python3"
+    storedPython && storedPython !== "python3" && storedPythonExists
       ? storedPython
-      : detectedPython || storedPython || "python3";
+      : detectedPython || "python3";
   return {
     provider: stored.provider || "ollama",
     model: stored.model || "gpt-oss:20b",
@@ -168,6 +174,9 @@ async function readSettings() {
     organizeInstructions:
       stored.organizeInstructions || stored.instructions || "",
     lastDestination: stored.lastDestination || "",
+    googleDriveClientId: stored.googleDriveClientId || "",
+    googleDriveRootName: stored.googleDriveRootName || "File Garden",
+    googleDriveRootId: stored.googleDriveRootId || "",
   };
 }
 
@@ -222,6 +231,8 @@ function secretStatus(secrets) {
       google: Boolean(secrets.google),
       openrouter: Boolean(secrets.openrouter),
     },
+    googleDriveClientSecret: Boolean(secrets.googleDriveClientSecret),
+    googleDriveConnected: Boolean(secrets.googleDriveRefreshToken),
   };
 }
 
@@ -334,13 +345,155 @@ async function ensureProviderReady(options) {
   }
 }
 
+function base64Url(buffer) {
+  return buffer
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function exchangeGoogleToken(parameters) {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(parameters),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      `Google OAuth: ${data.error_description || data.error || `HTTP ${response.status}`}`,
+    );
+  }
+  return data;
+}
+
+async function getGoogleDriveAccessToken() {
+  const settings = await readSettings();
+  const secrets = await readSecrets();
+  if (!settings.googleDriveClientId || !secrets.googleDriveRefreshToken) {
+    throw new Error("Спачатку падключы Google Drive у «Наладах»");
+  }
+  const token = await exchangeGoogleToken({
+    client_id: settings.googleDriveClientId,
+    ...(secrets.googleDriveClientSecret
+      ? { client_secret: secrets.googleDriveClientSecret }
+      : {}),
+    refresh_token: secrets.googleDriveRefreshToken,
+    grant_type: "refresh_token",
+  });
+  return token.access_token;
+}
+
+async function authorizeGoogleDrive() {
+  const settings = await readSettings();
+  const secrets = await readSecrets();
+  if (!settings.googleDriveClientId) {
+    throw new Error("Увядзі Google OAuth Client ID і захавай налады");
+  }
+
+  const verifier = base64Url(randomBytes(48));
+  const challenge = base64Url(createHash("sha256").update(verifier).digest());
+  const state = base64Url(randomBytes(24));
+  let timeout;
+  let settled = false;
+
+  const authorization = await new Promise((resolve, reject) => {
+    const server = createServer((request, response) => {
+      try {
+        const url = new URL(request.url || "/", "http://127.0.0.1");
+        if (url.pathname !== "/oauth2callback") {
+          response.writeHead(404).end();
+          return;
+        }
+        if (url.searchParams.get("state") !== state) {
+          throw new Error("Google OAuth вярнуў няправільны state");
+        }
+        const oauthError = url.searchParams.get("error");
+        if (oauthError) throw new Error(`Google OAuth: ${oauthError}`);
+        const code = url.searchParams.get("code");
+        if (!code) throw new Error("Google OAuth не вярнуў код аўтарызацыі");
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end("<h2>Google Drive падключаны</h2><p>Можна закрыць гэту старонку і вярнуцца ў File Garden.</p>");
+        settled = true;
+        clearTimeout(timeout);
+        server.close();
+        resolve({ code, redirectUri });
+      } catch (error) {
+        response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        response.end(String(error?.message || error));
+        settled = true;
+        clearTimeout(timeout);
+        server.close();
+        reject(error);
+      }
+    });
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", async () => {
+      const address = server.address();
+      redirectUri = `http://127.0.0.1:${address.port}/oauth2callback`;
+      const params = new URLSearchParams({
+        client_id: settings.googleDriveClientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: "https://www.googleapis.com/auth/drive.file",
+        access_type: "offline",
+        prompt: "consent",
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        state,
+      });
+      try {
+        await shell.openExternal(
+          `https://accounts.google.com/o/oauth2/v2/auth?${params}`,
+        );
+      } catch (error) {
+        server.close();
+        reject(error);
+      }
+    });
+    let redirectUri = "";
+    timeout = setTimeout(() => {
+      if (settled) return;
+      server.close();
+      reject(new Error("Час чакання аўтарызацыі Google скончыўся"));
+    }, 180000);
+  });
+
+  const token = await exchangeGoogleToken({
+    client_id: settings.googleDriveClientId,
+    ...(secrets.googleDriveClientSecret
+      ? { client_secret: secrets.googleDriveClientSecret }
+      : {}),
+    code: authorization.code,
+    code_verifier: verifier,
+    grant_type: "authorization_code",
+    redirect_uri: authorization.redirectUri,
+  });
+  if (!token.refresh_token) {
+    throw new Error("Google не вярнуў refresh token. Адкліч доступ і падключыся нанова.");
+  }
+  await saveSecrets({ values: { googleDriveRefreshToken: token.refresh_token } });
+  const root = await ensureDriveFolder(
+    token.access_token,
+    settings.googleDriveRootName || "File Garden",
+  );
+  await saveSettings({ googleDriveRootId: root.id });
+  return { root, status: secretStatus(await readSecrets()) };
+}
+
 ipcMain.handle("app:get-config", async () => {
   const { settings, secrets } = await applyDesktopSettings();
+  const lastOperation = await readLastOperation(historyPath());
   return {
     settings,
     modelOptions: ProviderModels,
     secretStatus: secretStatus(secrets),
     canUndo: Boolean((await readLastOperation(historyPath()))?.operations?.length),
+    canUploadToDrive: Boolean(
+      lastOperation?.mode === "organize" && lastOperation.operations?.length,
+    ),
   };
 });
 
@@ -362,6 +515,9 @@ ipcMain.handle("app:save-settings", async (_event, patch) => {
       renameInstructions: z.string().optional(),
       organizeInstructions: z.string().optional(),
       lastDestination: z.string().optional(),
+      googleDriveClientId: z.string().optional(),
+      googleDriveRootName: z.string().min(1).max(120).optional(),
+      googleDriveRootId: z.string().optional(),
     })
     .parse(patch);
   return saveSettings(safePatch);
@@ -375,16 +531,38 @@ ipcMain.handle("secrets:save", async (_event, payload) => {
           openai: z.string().optional(),
           google: z.string().optional(),
           openrouter: z.string().optional(),
+          googleDriveClientSecret: z.string().optional(),
         })
         .default({}),
       clear: z
-        .array(z.enum(["openai", "google", "openrouter"]))
+        .array(z.enum(["openai", "google", "openrouter", "googleDriveClientSecret"]))
         .default([]),
     })
     .parse(payload);
   const status = await saveSecrets(safePayload);
   await applyDesktopSettings();
   return status;
+});
+
+ipcMain.handle("google-drive:connect", async () => authorizeGoogleDrive());
+
+ipcMain.handle("google-drive:disconnect", async () => {
+  const secrets = await readSecrets();
+  if (secrets.googleDriveRefreshToken) {
+    try {
+      await fetch("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: secrets.googleDriveRefreshToken }),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      // Local disconnect must still work if Google is temporarily unavailable.
+    }
+  }
+  await saveSecrets({ clear: ["googleDriveRefreshToken"] });
+  const settings = await saveSettings({ googleDriveRootId: "" });
+  return { settings, status: secretStatus(await readSecrets()) };
 });
 
 ipcMain.handle("dialog:pick-files", async () => {
@@ -527,16 +705,45 @@ ipcMain.handle("file:open", async (_event, raw) => {
 ipcMain.handle("plan:apply", async (_event, raw) => {
   const validation = await effectivePlan(raw);
   if (!validation.valid) return validation;
+  const storedPlan = plans.get(raw.planId);
   const result = await applyOperations(validation.operations, (progress) =>
     sendProgress("apply:progress", progress),
   );
+  if (storedPlan && result.completed.length > 0) {
+    const completedById = new Map(
+      result.completed.map((operation) => [operation.id, operation]),
+    );
+    storedPlan.rows = storedPlan.rows.map((row) => {
+      const operation = completedById.get(row.id);
+      return operation ? { ...row, sourcePath: operation.to } : row;
+    });
+  }
   if (result.completed.length > 0) {
     await writeLastOperation(historyPath(), {
       createdAt: new Date().toISOString(),
+      mode: storedPlan?.mode || "rename",
       operations: result.completed,
     });
   }
   return { valid: true, ...result };
+});
+
+ipcMain.handle("google-drive:upload-last", async () => {
+  const journal = await readLastOperation(historyPath());
+  if (journal?.mode !== "organize" || !journal.operations?.length) {
+    throw new Error("Няма вынікаў апошняй сартыроўкі для загрузкі");
+  }
+  const settings = await readSettings();
+  const result = await uploadSortedOperations({
+    operations: journal.operations,
+    rootName: settings.googleDriveRootName || "File Garden",
+    getAccessToken: getGoogleDriveAccessToken,
+    onProgress: (progress) => sendProgress("drive:progress", progress),
+  });
+  if (settings.googleDriveRootId !== result.root.id) {
+    await saveSettings({ googleDriveRootId: result.root.id });
+  }
+  return result;
 });
 
 ipcMain.handle("plan:undo", async () => {

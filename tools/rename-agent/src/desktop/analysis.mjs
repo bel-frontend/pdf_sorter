@@ -70,6 +70,13 @@ function isFatalModelError(error) {
   );
 }
 
+function fatalAnalysisMessage(error) {
+  const message = String(error?.message || error);
+  return /document reader unavailable/i.test(message)
+    ? `Не працуе чытанне дакумента: ${message}`
+    : `Злучэнне з мадэллю перарвана: ${message}`;
+}
+
 function modelConfig(options) {
   return {
     provider: options.provider,
@@ -82,10 +89,9 @@ async function invoke(llm, input, signal) {
   return llm.invoke(input, signal ? { signal } : undefined);
 }
 
-async function suggestRename(llm, filePath, options, signal) {
-  const content = await extractContent(filePath);
+function renamePrompt(filePath, options, content) {
   const language = LANGUAGE_NAMES[options.language] || LANGUAGE_NAMES.en;
-  const prompt = [
+  return [
     "You create structured metadata for a safe file name.",
     'Return ONLY JSON: {"category":"...","topic":"...","person":"...","date":"...","summary":"...","confidence":0.0}.',
     `Use ${language} for category and topic, transliterated to ASCII-compatible Latin letters.`,
@@ -100,7 +106,43 @@ async function suggestRename(llm, filePath, options, signal) {
   ]
     .filter(Boolean)
     .join("\n");
-  const response = await invoke(llm, prompt, signal);
+}
+
+async function suggestRename(llm, visionLlm, filePath, options, signal) {
+  const extension = path.extname(filePath).toLowerCase();
+  let response;
+  if (IMAGE_MIME[extension]) {
+    const bytes = await fs.readFile(filePath);
+    const imageInput = [
+      new HumanMessage({
+        content: [
+          { type: "text", text: renamePrompt(filePath, options, "") },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${IMAGE_MIME[extension]};base64,${bytes.toString("base64")}`,
+            },
+          },
+        ],
+      }),
+    ];
+    try {
+      response = await invoke(visionLlm, imageInput, signal);
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      try {
+        if (visionLlm === llm) throw error;
+        response = await invoke(llm, imageInput, signal);
+      } catch (mainVisionError) {
+        if (mainVisionError?.name === "AbortError") throw mainVisionError;
+        const content = await extractContent(filePath, { imageOcr: false });
+        response = await invoke(llm, renamePrompt(filePath, options, content), signal);
+      }
+    }
+  } else {
+    const content = await extractContent(filePath);
+    response = await invoke(llm, renamePrompt(filePath, options, content), signal);
+  }
   return renameSchema.parse(parseJson(response?.content));
 }
 
@@ -123,45 +165,48 @@ async function classifyFile(llm, visionLlm, filePath, options, signal) {
   let response;
 
   if (IMAGE_MIME[extension]) {
-    try {
-      const bytes = await fs.readFile(filePath);
-      response = await invoke(
-        visionLlm,
-        [
-          new HumanMessage({
-            content: [
-              {
-                type: "text",
-                text: categoryPrompt(
-                  filePath,
-                  options.categories,
-                  options.instructions,
-                ),
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${IMAGE_MIME[extension]};base64,${bytes.toString("base64")}`,
-                },
-              },
-            ],
-          }),
+    const bytes = await fs.readFile(filePath);
+    const imageInput = [
+      new HumanMessage({
+        content: [
+          {
+            type: "text",
+            text: categoryPrompt(
+              filePath,
+              options.categories,
+              options.instructions,
+            ),
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${IMAGE_MIME[extension]};base64,${bytes.toString("base64")}`,
+            },
+          },
         ],
-        signal,
-      );
+      }),
+    ];
+    try {
+      response = await invoke(visionLlm, imageInput, signal);
     } catch (error) {
       if (error?.name === "AbortError") throw error;
-      const content = await extractContent(filePath);
-      response = await invoke(
-        llm,
-        categoryPrompt(
-          filePath,
-          options.categories,
-          options.instructions,
-          content.slice(0, 5000),
-        ),
-        signal,
-      );
+      try {
+        if (visionLlm === llm) throw error;
+        response = await invoke(llm, imageInput, signal);
+      } catch (mainVisionError) {
+        if (mainVisionError?.name === "AbortError") throw mainVisionError;
+        const content = await extractContent(filePath, { imageOcr: false });
+        response = await invoke(
+          llm,
+          categoryPrompt(
+            filePath,
+            options.categories,
+            options.instructions,
+            content.slice(0, 5000),
+          ),
+          signal,
+        );
+      }
     }
   } else {
     const content = await extractContent(filePath);
@@ -193,6 +238,16 @@ export function normalizeCategories(values) {
 
 export async function analyzeRename(files, options, hooks = {}) {
   const llm = buildChatModel(modelConfig(options));
+  let visionLlm = llm;
+  try {
+    visionLlm = buildChatModel({
+      provider: options.visionProvider,
+      model: options.visionModel,
+      ollamaBaseUrl: options.ollamaBaseUrl,
+    });
+  } catch {
+    // Filename/text analysis remains available if a vision model cannot initialize.
+  }
   const reserved = new Set();
   const rows = [];
   const failures = [];
@@ -210,7 +265,13 @@ export async function analyzeRename(files, options, hooks = {}) {
       filePath,
     });
     try {
-      const suggestion = await suggestRename(llm, filePath, options, hooks.signal);
+      const suggestion = await suggestRename(
+        llm,
+        visionLlm,
+        filePath,
+        options,
+        hooks.signal,
+      );
       const extension = path.extname(filePath).toLowerCase();
       const fields = {
         category: sanitizeNamePart(suggestion.category, "document"),
@@ -240,9 +301,7 @@ export async function analyzeRename(files, options, hooks = {}) {
         break;
       }
       if (isFatalModelError(error)) {
-        throw new Error(
-          `Злучэнне з мадэллю перарвана: ${error?.message || error}`,
-        );
+        throw new Error(fatalAnalysisMessage(error));
       }
       failures.push({
         sourcePath: filePath,
@@ -315,9 +374,7 @@ export async function analyzeOrganize(files, options, hooks = {}) {
         break;
       }
       if (isFatalModelError(error)) {
-        throw new Error(
-          `Злучэнне з мадэллю перарвана: ${error?.message || error}`,
-        );
+        throw new Error(fatalAnalysisMessage(error));
       }
       failures.push({
         sourcePath: filePath,

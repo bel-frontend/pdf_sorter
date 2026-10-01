@@ -13,8 +13,7 @@ const DEFAULT_READER_SCRIPT = path.resolve(
 );
 
 const textExt = new Set([".xml", ".txt", ".csv", ".json", ".md"]);
-const pdfAndImageExt = new Set([
-  ".pdf",
+const imageExt = new Set([
   ".jpg",
   ".jpeg",
   ".png",
@@ -59,16 +58,29 @@ async function readDocSafe(filePath) {
   }
 }
 
-async function readPdfOrImageSafe(filePath) {
+async function readPdfOrImageSafe(filePath, required = true) {
   const workspaceRoot = path.resolve(MODULE_DIR, "../../..");
   const venvPython = path.join(workspaceRoot, ".venv", "bin", "python");
   const configuredPython = process.env.READER_PYTHON;
   const readerScript = process.env.READER_SCRIPT_PATH || DEFAULT_READER_SCRIPT;
   const ocrLang = process.env.OCR_LANG || "en,ru,be,uk";
 
-  const pythonCandidates = [
+  const rawCandidates = [
     ...new Set([configuredPython, venvPython, "python3"].filter(Boolean)),
   ];
+  const pythonCandidates = [];
+  for (const candidate of rawCandidates) {
+    if (!path.isAbsolute(candidate)) {
+      pythonCandidates.push(candidate);
+      continue;
+    }
+    try {
+      await fs.access(candidate);
+      pythonCandidates.push(candidate);
+    } catch {
+      // Ignore stale absolute paths and packaged-app pseudo paths.
+    }
+  }
   const errors = [];
 
   for (const python of pythonCandidates) {
@@ -107,12 +119,11 @@ async function readPdfOrImageSafe(filePath) {
     }
   }
 
-  throw new Error(
-    `Document reader unavailable for ${path.basename(filePath)}. ${errors.join(" | ")}`,
-  );
+  if (!required) return "";
+  throw new Error(`Document reader unavailable for ${path.basename(filePath)}. ${errors.join(" | ")}`);
 }
 
-export async function extractContent(filePath) {
+export async function extractContent(filePath, options = {}) {
   const ext = path.extname(filePath).toLowerCase();
 
   if (textExt.has(ext)) {
@@ -127,8 +138,13 @@ export async function extractContent(filePath) {
     return readDocSafe(filePath);
   }
 
-  if (pdfAndImageExt.has(ext)) {
-    return readPdfOrImageSafe(filePath);
+  if (ext === ".pdf") {
+    return readPdfOrImageSafe(filePath, true);
+  }
+
+  if (imageExt.has(ext)) {
+    if (options.imageOcr === false) return "";
+    return readPdfOrImageSafe(filePath, false);
   }
 
   return "";

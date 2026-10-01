@@ -24,12 +24,14 @@ function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [message, setMessage] = useState("");
   const [canUndo, setCanUndo] = useState(false);
+  const [canUploadToDrive, setCanUploadToDrive] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [credentials, setCredentials] = useState({
     openai: "",
     google: "",
     openrouter: "",
+    googleDriveClientSecret: "",
   });
 
   useEffect(() => {
@@ -39,14 +41,17 @@ function App() {
       setCategories(data.settings.categories || []);
       setDestination(data.settings.lastDestination || "");
       setCanUndo(data.canUndo);
+      setCanUploadToDrive(data.canUploadToDrive);
     });
     const offAnalysis = api.onAnalysisProgress(setProgress);
     const offApply = api.onApplyProgress(setProgress);
     const offUndo = api.onUndoProgress(setProgress);
+    const offDrive = api.onDriveProgress(setProgress);
     return () => {
       offAnalysis();
       offApply();
       offUndo();
+      offDrive();
     };
   }, []);
 
@@ -122,7 +127,12 @@ function App() {
     if (Object.keys(values).length > 0) {
       const secretStatus = await api.saveSecrets({ values, clear: [] });
       setConfig((current) => ({ ...current, secretStatus }));
-      setCredentials({ openai: "", google: "", openrouter: "" });
+      setCredentials({
+        openai: "",
+        google: "",
+        openrouter: "",
+        googleDriveClientSecret: "",
+      });
     }
     if (showMessage) setMessage("Налады захаваныя");
   }
@@ -134,9 +144,48 @@ function App() {
     setMessage("Ключ выдалены з бяспечнага сховішча");
   }
 
+  async function connectGoogleDrive() {
+    setBusy("google-connect");
+    setMessage("Адкрываем аўтарызацыю Google у браўзеры…");
+    try {
+      await persistConfiguration(false);
+      const result = await api.connectGoogleDrive();
+      setConfig((current) => ({ ...current, secretStatus: result.status }));
+      setSettings((current) => ({
+        ...current,
+        googleDriveRootId: result.root.id,
+      }));
+      setMessage(`Google Drive падключаны. Папка: ${result.root.name}`);
+    } catch (error) {
+      setMessage(error.message || String(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function disconnectGoogleDrive() {
+    setBusy("google-disconnect");
+    try {
+      const result = await api.disconnectGoogleDrive();
+      setConfig((current) => ({ ...current, secretStatus: result.status }));
+      setSettings(result.settings);
+      setMessage("Google Drive адключаны");
+    } catch (error) {
+      setMessage(error.message || String(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
   function changeMode(nextMode) {
     setMode(nextMode);
     resetPlan();
+  }
+
+  function continueToOrganize() {
+    setMode("organize");
+    resetPlan();
+    setMessage("Перайменаваныя файлы гатовыя да сартавання");
   }
 
   function updateSetting(key, value) {
@@ -288,15 +337,32 @@ function App() {
         return;
       }
       const completed = new Set(result.completed.map((item) => item.id));
+      const completedOperations = new Map(
+        result.completed.map((item) => [item.id, item]),
+      );
+      const movedPaths = new Map(
+        result.completed.map((item) => [item.from, item.to]),
+      );
+      setFiles((current) => [
+        ...new Set(current.map((file) => movedPaths.get(file) || file)),
+      ]);
       const failed = new Map(result.failures.map((item) => [item.id, item.error]));
       setRows((current) =>
-        current.map((row) => ({
-          ...row,
-          status: completed.has(row.id) ? "completed" : failed.has(row.id) ? "failed" : row.status,
-        })),
+        current.map((row) => {
+          const operation = completedOperations.get(row.id);
+          return {
+            ...row,
+            sourcePath: operation?.to || row.sourcePath,
+            selected: operation ? false : row.selected,
+            status: completed.has(row.id) ? "completed" : failed.has(row.id) ? "failed" : row.status,
+          };
+        }),
       );
       setErrors(Object.fromEntries(failed));
       setCanUndo(result.completed.length > 0);
+      if (mode === "organize" && result.completed.length > 0) {
+        setCanUploadToDrive(true);
+      }
       setMessage(
         `Гатова: ${result.completed.length}; памылак: ${result.failures.length}`,
       );
@@ -315,10 +381,37 @@ function App() {
       if (result.error) setMessage(result.error);
       else if (result.failures.length) setMessage(`Адмена спынена: ${result.failures[0].error}`);
       else {
+        const restoredPaths = new Map(
+          result.completed.map((item) => [item.from, item.to]),
+        );
+        setFiles((current) => [
+          ...new Set(current.map((file) => restoredPaths.get(file) || file)),
+        ]);
         setMessage(`Вернута файлаў: ${result.completed.length}`);
         setCanUndo(false);
+        setCanUploadToDrive(false);
         resetPlan();
       }
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function uploadToGoogleDrive() {
+    if (!config.secretStatus.googleDriveConnected) {
+      setMessage("Спачатку падключы Google Drive у наладах");
+      setPage("settings");
+      return;
+    }
+    setBusy("drive");
+    setProgress({ current: 0, total: selectedCount || 1 });
+    try {
+      const result = await api.uploadLastToGoogleDrive();
+      setMessage(
+        `Google Drive: загружана ${result.completed.length}; памылак ${result.failures.length}`,
+      );
+    } catch (error) {
+      setMessage(error.message || String(error));
     } finally {
       setBusy("");
     }
@@ -369,6 +462,9 @@ function App() {
           updateVisionProvider={updateVisionProvider}
           choosePython={choosePython}
           clearCredential={clearCredential}
+          connectGoogleDrive={connectGoogleDrive}
+          disconnectGoogleDrive={disconnectGoogleDrive}
+          busy={busy}
           save={persistConfiguration}
           message={message}
         />
@@ -462,7 +558,7 @@ function App() {
             {busy && progress.total > 0 && (
               <div className="progress-wrap">
                 <div>
-                  <span>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : "Змяненне файлаў"}</span>
+                  <span>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : busy === "drive" ? "Загрузка ў Google Drive" : "Змяненне файлаў"}</span>
                   <span className="progress-actions"><strong>{progress.current}/{progress.total}</strong>{busy === "analysis" && <button className="stop-analysis" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>}</span>
                 </div>
                 <progress value={progress.current} max={progress.total} />
@@ -493,7 +589,11 @@ function App() {
               {busy === "analysis" ? (
                 <button className="button danger" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>
               ) : (
-                <button className="button primary" disabled={!planId || !selectedCount || Boolean(busy)} onClick={prepareApply}>{mode === "rename" ? "Перайменаваць" : "Перамясціць"} {selectedCount || ""} файлаў</button>
+                <div className="preview-actions">
+                  {mode === "rename" && rows.some((row) => row.status === "completed") && <button className="button secondary next-step" disabled={Boolean(busy)} onClick={continueToOrganize}>Далей: сартаваць →</button>}
+                  {mode === "organize" && canUploadToDrive && <button className="button secondary" disabled={Boolean(busy)} onClick={uploadToGoogleDrive}>↑ У Google Drive</button>}
+                  <button className="button primary" disabled={!planId || !selectedCount || Boolean(busy)} onClick={prepareApply}>{mode === "rename" ? "Перайменаваць" : "Перамясціць"} {selectedCount || ""} файлаў</button>
+                </div>
               )}
             </div>
           </section>

@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld("renameDesktop", {
   getConfig: () => ipcRenderer.invoke("app:get-config"),
   saveSettings: (patch) => ipcRenderer.invoke("app:save-settings", patch),
   saveSecrets: (payload) => ipcRenderer.invoke("secrets:save", payload),
+  connectGoogleDrive: () => ipcRenderer.invoke("google-drive:connect"),
+  disconnectGoogleDrive: () => ipcRenderer.invoke("google-drive:disconnect"),
+  uploadLastToGoogleDrive: () => ipcRenderer.invoke("google-drive:upload-last"),
   pickFiles: () => ipcRenderer.invoke("dialog:pick-files"),
   pickFolders: () => ipcRenderer.invoke("dialog:pick-folders"),
   pickDestination: () => ipcRenderer.invoke("dialog:pick-destination"),
@@ -28,4 +31,5 @@ contextBridge.exposeInMainWorld("renameDesktop", {
   onAnalysisProgress: (callback) => subscribe("analysis:progress", callback),
   onApplyProgress: (callback) => subscribe("apply:progress", callback),
   onUndoProgress: (callback) => subscribe("undo:progress", callback),
+  onDriveProgress: (callback) => subscribe("drive:progress", callback),
 });

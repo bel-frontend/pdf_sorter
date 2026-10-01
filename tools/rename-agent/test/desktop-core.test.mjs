@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { expandInputPaths } from "../src/desktop/input-files.mjs";
+import { extractContent } from "../src/extractors.mjs";
 import {
   applyOperations,
   buildEffectiveOperations,
@@ -49,6 +50,13 @@ test("formats structured names and removes empty placeholders", () => {
     }),
     "bank_statement_main_account_2026_10",
   );
+});
+
+test("can skip optional image OCR when vision handles the file", async (t) => {
+  const root = await temporaryDirectory(t);
+  const image = path.join(root, "photo.png");
+  await fs.writeFile(image, "not-a-real-image");
+  assert.equal(await extractContent(image, { imageOcr: false }), "");
 });
 
 test("reserves unique names without overwriting existing files", async (t) => {
