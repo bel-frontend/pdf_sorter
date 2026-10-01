@@ -1,15 +1,25 @@
 {
   "name": "rename-agent",
   "version": "1.0.0",
+  "description": "Desktop and CLI tools for AI-assisted file renaming and organization",
+  "author": "bel-frontend",
   "private": true,
   "type": "module",
+  "main": "electron/main.mjs",
   "scripts": {
     "apply": "node src/index.mjs",
     "apply:pdf": "node src/index.mjs --include pdf",
     "apply:photos": "node src/index.mjs --include photos",
     "apply:docs": "node src/index.mjs --include docs",
     "organize": "node src/organize.mjs",
-    "organize:smart": "node src/organize.mjs --smart"
+    "organize:smart": "node src/organize.mjs --smart",
+    "gui": "npm run gui:build && electron .",
+    "gui:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "gui:build": "vite build",
+    "gui:dist:mac": "npm run gui:build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir",
+    "gui:dist:linux": "npm run gui:build && electron-builder --linux AppImage --x64",
+    "gui:dist:linux:arm64": "npm run gui:build && electron-builder --linux AppImage --arm64",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@langchain/core": "^1.1.29",
@@ -19,6 +29,45 @@
     "dotenv": "^17.3.1",
     "fast-glob": "^3.3.3",
     "mammoth": "^1.11.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
     "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^38.1.2",
+    "electron-builder": "^26.0.12",
+    "@vitejs/plugin-react": "^5.0.3",
+    "vite": "^7.1.7",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "by.filegarden.desktop",
+    "productName": "File Garden",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../read_document.py",
+        "to": "read_document.py"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dir"]
+    },
+    "linux": {
+      "category": "Utility",
+      "target": ["AppImage"]
+    }
   }
 }

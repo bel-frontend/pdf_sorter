@@ -69,10 +69,12 @@ const DEFAULT_MODEL = {
 const VALID_PROVIDERS = new Set(Object.values(Provider));
 
 // ── Provider-specific build options ────────────────────────────────
-const OPENAI_DEFAULT_OPTIONS = {
-  timeout: Number(process.env.OPENAI_TIMEOUT_MS || 90000),
-  maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 2),
-};
+function openAiDefaultOptions() {
+  return {
+    timeout: Number(process.env.OPENAI_TIMEOUT_MS || 90000),
+    maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 2),
+  };
+}
 
 const OPENAI_MODEL_OPTIONS = {
   "gpt-4o": { temperature: 0.7 },
@@ -124,7 +126,7 @@ function buildOpenAIModel(model) {
   return new ChatOpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     model,
-    ...OPENAI_DEFAULT_OPTIONS,
+    ...openAiDefaultOptions(),
     ...(OPENAI_MODEL_OPTIONS[model] || { temperature: 0 }),
   });
 }

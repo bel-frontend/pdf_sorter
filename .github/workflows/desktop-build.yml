@@ -1,0 +1,40 @@
+name: Desktop builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            command: gui:dist:mac
+            artifact: macos-app
+            path: tools/rename-agent/release/mac*/File Garden.app
+          - os: ubuntu-24.04
+            command: gui:dist:linux
+            artifact: linux-appimage
+            path: tools/rename-agent/release/*.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tools/rename-agent/package-lock.json
+      - run: npm ci
+        working-directory: tools/rename-agent
+      - run: npm test
+        working-directory: tools/rename-agent
+      - run: npm run ${{ matrix.command }}
+        working-directory: tools/rename-agent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error

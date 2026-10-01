@@ -4,9 +4,39 @@
 - асэнсаванага перайменавання файлаў (`apply`),
 - сартыроўкі па катэгорыях (`organize` / `organize:smart`).
 
-## Падтрымліваемыя мадэлі
+Акрамя CLI праект мае desktop GUI **File Garden** для macOS і Linux. У ім
+можна выбіраць асобныя файлы і папкі, задаваць правілы сваімі словамі,
+рэдагаваць план перад ужываннем і адмяняць апошні запуск.
 
-Мадэль выбіраецца толькі па імені (`--model` або `.env`).
+## Desktop GUI
+
+```bash
+# Рэжым распрацоўкі з hot reload
+npm --prefix tools/rename-agent run gui:dev
+
+# Звычайны лакальны запуск
+npm --prefix tools/rename-agent run gui
+
+# Лакальная macOS .app
+npm --prefix tools/rename-agent run gui:dist:mac
+
+# Linux x64 AppImage (запускаць у Linux)
+npm --prefix tools/rename-agent run gui:dist:linux
+```
+
+Гатовыя зборкі з'яўляюцца ў `tools/rename-agent/release/`. GitHub workflow
+`Desktop builds` таксама збірае macOS `.app` і Linux AppImage пры ручным
+запуску або для тэгаў `desktop-v*`.
+
+Desktop GUI не патрабуе `.env`: правайдар, мадэлі, API-ключы, Ollama URL,
+Python і мовы OCR задаюцца ў блоку «Мадэль». API-ключы захоўваюцца асобна ад
+астатніх налад і шыфруюцца праз сістэмнае бяспечнае сховішча Electron
+(macOS Keychain або Linux secret storage). Канфіг `.env` ніжэй патрэбны толькі
+для CLI-каманд.
+
+## CLI: падтрымліваемыя мадэлі
+
+У CLI мадэль выбіраецца толькі па імені (`--model` або `.env`).
 Калі мадэль не ў whitelist, агент спыняецца з памылкай `Unsupported model`.
 
 OpenAI:
