@@ -63,6 +63,13 @@ function parseJson(content) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
+function isFatalModelError(error) {
+  const message = String(error?.message || error || "");
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|401|403|unauthorized|forbidden|API.?key|model.+not found|document reader unavailable/i.test(
+    message,
+  );
+}
+
 function modelConfig(options) {
   return {
     provider: options.provider,
@@ -232,6 +239,11 @@ export async function analyzeRename(files, options, hooks = {}) {
         cancelled = true;
         break;
       }
+      if (isFatalModelError(error)) {
+        throw new Error(
+          `Злучэнне з мадэллю перарвана: ${error?.message || error}`,
+        );
+      }
       failures.push({
         sourcePath: filePath,
         error: String(error?.message || error),
@@ -301,6 +313,11 @@ export async function analyzeOrganize(files, options, hooks = {}) {
       if (error?.name === "AbortError" || hooks.signal?.aborted) {
         cancelled = true;
         break;
+      }
+      if (isFatalModelError(error)) {
+        throw new Error(
+          `Злучэнне з мадэллю перарвана: ${error?.message || error}`,
+        );
       }
       failures.push({
         sourcePath: filePath,

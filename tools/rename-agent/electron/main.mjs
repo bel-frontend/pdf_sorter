@@ -111,6 +111,33 @@ async function exists(filePath) {
   }
 }
 
+async function findProjectPython() {
+  const starts = [
+    path.dirname(app.getPath("exe")),
+    process.cwd(),
+    path.resolve(MODULE_DIR, "../../.."),
+  ];
+  const visited = new Set();
+  for (const start of starts) {
+    let current = path.resolve(start);
+    for (let depth = 0; depth < 12; depth += 1) {
+      if (visited.has(current)) break;
+      visited.add(current);
+      for (const relative of [
+        path.join(".venv", "bin", "python"),
+        path.join(".venv", "Scripts", "python.exe"),
+      ]) {
+        const candidate = path.join(current, relative);
+        if (await exists(candidate)) return candidate;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  return "";
+}
+
 async function readSettings() {
   let stored = {};
   try {
@@ -118,13 +145,19 @@ async function readSettings() {
   } catch {
     // First run.
   }
+  const detectedPython = await findProjectPython();
+  const storedPython = stored.readerPython || "";
+  const readerPython =
+    storedPython && storedPython !== "python3"
+      ? storedPython
+      : detectedPython || storedPython || "python3";
   return {
     provider: stored.provider || "ollama",
     model: stored.model || "gpt-oss:20b",
     visionProvider: stored.visionProvider || "ollama",
     visionModel: stored.visionModel || "gemma3:4b",
     ollamaBaseUrl: stored.ollamaBaseUrl || "http://localhost:11434",
-    readerPython: stored.readerPython || "python3",
+    readerPython,
     ocrLang: stored.ocrLang || "en,ru,be,uk",
     openaiTimeoutMs: stored.openaiTimeoutMs || 90000,
     openaiMaxRetries: stored.openaiMaxRetries ?? 2,
@@ -260,6 +293,47 @@ function sendProgress(channel, payload) {
   }
 }
 
+async function ensureProviderReady(options) {
+  if (options.provider !== "ollama") {
+    const secrets = await readSecrets();
+    if (!secrets[options.provider]) {
+      throw new Error(
+        `Для ${options.provider} не захаваны API-ключ. Адкрый старонку «Налады».`,
+      );
+    }
+    return;
+  }
+
+  const baseUrl = String(options.ollamaBaseUrl || "http://localhost:11434").replace(
+    /\/$/,
+    "",
+  );
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/api/tags`, {
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    throw new Error(
+      `Ollama не адказвае на ${baseUrl}. Запусці Ollama або выберы іншага правайдара ў «Наладах».`,
+    );
+  }
+  if (!response.ok) {
+    throw new Error(`Ollama вярнуў памылку HTTP ${response.status}.`);
+  }
+  const data = await response.json();
+  const installed = (data.models || []).map((item) => item.name);
+  const wanted = options.model;
+  const modelFound = installed.some(
+    (name) => name === wanted || name === `${wanted}:latest` || `${name}:latest` === wanted,
+  );
+  if (!modelFound) {
+    throw new Error(
+      `Мадэль ${wanted} не ўсталяваная ў Ollama. Даступныя: ${installed.join(", ") || "няма"}.`,
+    );
+  }
+}
+
 ipcMain.handle("app:get-config", async () => {
   const { settings, secrets } = await applyDesktopSettings();
   return {
@@ -374,6 +448,7 @@ ipcMain.handle("analysis:start", async (_event, rawOptions) => {
     ollamaBaseUrl: options.ollamaBaseUrl,
   });
   await applyDesktopSettings();
+  await ensureProviderReady(options);
   activeController?.abort();
   activeController = new AbortController();
   const onProgress = (progress) => sendProgress("analysis:progress", progress);
@@ -391,7 +466,6 @@ ipcMain.handle("analysis:start", async (_event, rawOptions) => {
           });
     const planId = randomUUID();
     const categories = normalizeCategories(result.categories || options.categories);
-    plans.clear();
     plans.set(planId, {
       mode: options.mode,
       rows: result.rows,
@@ -434,6 +508,21 @@ async function effectivePlan(raw) {
 }
 
 ipcMain.handle("plan:validate", async (_event, raw) => effectivePlan(raw));
+
+ipcMain.handle("file:open", async (_event, raw) => {
+  const payload = z
+    .object({ planId: z.string().uuid(), rowId: z.string().uuid() })
+    .parse(raw);
+  const storedPlan = plans.get(payload.planId);
+  const row = storedPlan?.rows.find((item) => item.id === payload.rowId);
+  if (!row) throw new Error("Файл не ўваходзіць у бягучы план");
+  if (!(await exists(row.sourcePath))) {
+    throw new Error("Зыходны файл больш не існуе");
+  }
+  const errorMessage = await shell.openPath(row.sourcePath);
+  if (errorMessage) throw new Error(errorMessage);
+  return true;
+});
 
 ipcMain.handle("plan:apply", async (_event, raw) => {
   const validation = await effectivePlan(raw);

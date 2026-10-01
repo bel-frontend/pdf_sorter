@@ -66,9 +66,10 @@ async function readPdfOrImageSafe(filePath) {
   const readerScript = process.env.READER_SCRIPT_PATH || DEFAULT_READER_SCRIPT;
   const ocrLang = process.env.OCR_LANG || "en,ru,be,uk";
 
-  const pythonCandidates = [configuredPython, venvPython, "python3"].filter(
-    Boolean,
-  );
+  const pythonCandidates = [
+    ...new Set([configuredPython, venvPython, "python3"].filter(Boolean)),
+  ];
+  const errors = [];
 
   for (const python of pythonCandidates) {
     try {
@@ -98,6 +99,7 @@ async function readPdfOrImageSafe(filePath) {
         return text.slice(0, 12000);
       }
     } catch (err) {
+      errors.push(`${python}: ${err.message || err}`);
       console.error(
         `[reader] ${path.basename(filePath)}: ${python} failed — ${err.message || err}`,
       );
@@ -105,10 +107,9 @@ async function readPdfOrImageSafe(filePath) {
     }
   }
 
-  console.error(
-    `[reader] ${path.basename(filePath)}: all python candidates failed, returning empty`,
+  throw new Error(
+    `Document reader unavailable for ${path.basename(filePath)}. ${errors.join(" | ")}`,
   );
-  return "";
 }
 
 export async function extractContent(filePath) {

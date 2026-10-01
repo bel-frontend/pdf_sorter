@@ -25,6 +25,7 @@ OCR engine: EasyOCR (pure pip, no system dependencies).
 """
 
 import argparse
+import importlib.util
 import os
 import sys
 import warnings
@@ -321,6 +322,15 @@ def process_file(
 
     ext = Path(file_path).suffix.lower()
     image_exts = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp", ".gif"}
+
+    if ext == ".pdf" and importlib.util.find_spec("fitz") is None:
+        raise RuntimeError(
+            "PyMuPDF (fitz) is not installed for this Python interpreter"
+        )
+    if ext in image_exts and importlib.util.find_spec("easyocr") is None:
+        raise RuntimeError(
+            "EasyOCR is not installed for this Python interpreter"
+        )
 
     # Smart page selection for PDFs when no explicit pages given
     if ext == ".pdf" and pages is None and smart_pages:

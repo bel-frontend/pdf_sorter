@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("renameDesktop", {
   analyze: (options) => ipcRenderer.invoke("analysis:start", options),
   cancelAnalysis: () => ipcRenderer.invoke("analysis:cancel"),
   validatePlan: (payload) => ipcRenderer.invoke("plan:validate", payload),
+  openFile: (payload) => ipcRenderer.invoke("file:open", payload),
   applyPlan: (payload) => ipcRenderer.invoke("plan:apply", payload),
   undo: () => ipcRenderer.invoke("plan:undo"),
   pathForFile: (file) => webUtils.getPathForFile(file),

@@ -28,6 +28,7 @@ export const ProviderModels = {
     "llama3.3:latest",
     "gemma3:4b",
     "gemma3:12b",
+    "gemma4:26b",
     "gpt-oss:20b",
   ],
   [Provider.GOOGLE]: ["gemini-2.5-pro"],

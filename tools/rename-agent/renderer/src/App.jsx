@@ -84,6 +84,13 @@ function App() {
     await addPaths(await api.pickFolders());
   }
 
+  function clearFiles() {
+    setFiles([]);
+    setRejected([]);
+    resetPlan();
+    setMessage("Спіс файлаў ачышчаны");
+  }
+
   async function chooseDestination() {
     const picked = await api.pickDestination();
     if (!picked) return;
@@ -182,10 +189,17 @@ function App() {
   async function analyze() {
     if (!files.length) return setMessage("Спачатку дадай файлы або папку");
     if (mode === "organize" && !destination) return setMessage("Выберы папку выніку");
+    if (!providerReady) {
+      setMessage(`Для ${settings.provider} трэба захаваць API-ключ`);
+      setPage("settings");
+      return;
+    }
     setBusy("analysis");
     setMessage("");
     setProgress({ current: 0, total: files.length });
     setErrors({});
+    setRows([]);
+    setFailures([]);
     try {
       await persistConfiguration(false);
       const result = await api.analyze({
@@ -207,7 +221,9 @@ function App() {
       setFailures(result.failures || []);
       setCategories(result.categories || categories);
       setMessage(
-        result.cancelled
+        result.rows.length === 0 && result.failures.length > 0
+          ? `Не атрымалася стварыць план: памылак ${result.failures.length}`
+          : result.cancelled
           ? `Аналіз спынены. У плане засталося ${result.rows.length} файлаў`
           : `План гатовы: ${result.rows.length} файлаў`,
       );
@@ -225,6 +241,14 @@ function App() {
     setErrors((current) => ({ ...current, [id]: undefined }));
   }
 
+  async function openPreviewFile(rowId) {
+    try {
+      await api.openFile({ planId, rowId });
+    } catch (error) {
+      setMessage(`Не атрымалася адкрыць файл: ${error.message || error}`);
+    }
+  }
+
   const payload = useMemo(
     () => ({
       planId,
@@ -240,13 +264,17 @@ function App() {
 
   async function prepareApply() {
     if (!selectedCount) return;
-    const result = await api.validatePlan(payload);
-    if (!result.valid) {
-      setErrors(Object.fromEntries(result.errors.map((item) => [item.id, item.message])));
-      setMessage("Выпраў памылкі ў плане перад ужываннем");
-      return;
+    try {
+      const result = await api.validatePlan(payload);
+      if (!result.valid) {
+        setErrors(Object.fromEntries(result.errors.map((item) => [item.id, item.message])));
+        setMessage("Выпраў памылкі ў плане перад ужываннем");
+        return;
+      }
+      setConfirming(true);
+    } catch (error) {
+      setMessage(error.message || String(error));
     }
-    setConfirming(true);
   }
 
   async function applyPlan() {
@@ -377,10 +405,16 @@ function App() {
               </div>
               {files.length > 0 && (
                 <div className="source-list">
-                  {files.slice(0, 6).map((file) => (
-                    <div key={file}><span>◇</span><div><strong>{basename(file)}</strong><small>{dirname(file)}</small></div><button onClick={() => { setFiles(files.filter((item) => item !== file)); resetPlan(); }}>×</button></div>
-                  ))}
-                  {files.length > 6 && <p>і яшчэ {files.length - 6}…</p>}
+                  <div className="source-list-toolbar">
+                    <span>Выбрана: {files.length}</span>
+                    <button onClick={clearFiles}>Ачысціць усе</button>
+                  </div>
+                  <div className="source-list-items">
+                    {files.slice(0, 6).map((file) => (
+                      <div key={file}><span>◇</span><div><strong>{basename(file)}</strong><small>{dirname(file)}</small></div><button aria-label={`Прыбраць ${basename(file)}`} onClick={() => { setFiles((current) => current.filter((item) => item !== file)); resetPlan(); }}>×</button></div>
+                    ))}
+                    {files.length > 6 && <p>і яшчэ {files.length - 6}…</p>}
+                  </div>
                 </div>
               )}
               {rejected.length > 0 && <p className="hint warning">Прапушчана непадтрымліваемых: {rejected.length}</p>}
@@ -426,7 +460,13 @@ function App() {
             </div>
 
             {busy && progress.total > 0 && (
-              <div className="progress-wrap"><div><span>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : "Змяненне файлаў"}</span><strong>{progress.current}/{progress.total}</strong></div><progress value={progress.current} max={progress.total} /></div>
+              <div className="progress-wrap">
+                <div>
+                  <span>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : "Змяненне файлаў"}</span>
+                  <span className="progress-actions"><strong>{progress.current}/{progress.total}</strong>{busy === "analysis" && <button className="stop-analysis" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>}</span>
+                </div>
+                <progress value={progress.current} max={progress.total} />
+              </div>
             )}
 
             {rows.length === 0 ? (
@@ -438,7 +478,7 @@ function App() {
                   <tbody>{rows.map((row) => (
                     <tr key={row.id} className={`${row.selected === false ? "disabled-row" : ""} ${row.status || ""}`}>
                       <td><input type="checkbox" checked={row.selected !== false} onChange={(e) => editRow(row.id, { selected: e.target.checked })} /></td>
-                      <td><strong>{basename(row.sourcePath)}</strong><small>{dirname(row.sourcePath)}</small>{row.summary && <p>{row.summary}</p>}</td>
+                      <td><button className="file-open" onClick={() => openPreviewFile(row.id)} title="Адкрыць зыходны файл"><span>↗</span><strong>{basename(row.sourcePath)}</strong></button><small>{dirname(row.sourcePath)}</small>{row.summary && <p>{row.summary}</p>}</td>
                       <td>{mode === "rename" ? <input className={errors[row.id] ? "invalid" : ""} value={row.proposedName} onChange={(e) => editRow(row.id, { proposedName: e.target.value })} /> : <select className={errors[row.id] ? "invalid" : ""} value={row.category} onChange={(e) => editRow(row.id, { category: e.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select>}{errors[row.id] && <span className="row-error">{errors[row.id]}</span>}{row.status === "completed" && <span className="row-success">Гатова</span>}</td>
                       <td><span className="confidence"><i style={{ width: `${Math.round((row.confidence || 0) * 100)}%` }} /></span><small>{Math.round((row.confidence || 0) * 100)}%</small></td>
                     </tr>
@@ -447,10 +487,14 @@ function App() {
               </div>
             )}
 
-            {failures.length > 0 && <div className="failure-box"><strong>Не атрымалася прааналізаваць: {failures.length}</strong>{failures.slice(0, 3).map((failure) => <p key={failure.sourcePath}>{basename(failure.sourcePath)} — {failure.error}</p>)}</div>}
+            {failures.length > 0 && <div className="failure-box"><strong>Не атрымалася прааналізаваць: {failures.length} з {files.length}</strong>{[...new Map(failures.map((failure) => [failure.error, failure])).values()].slice(0, 3).map((failure) => <p key={`${failure.sourcePath}-${failure.error}`}>{failure.error}</p>)}{failures.length > 3 && <small>Памылкі згрупаваныя; праграма знайшла ўсе {files.length} файлаў.</small>}</div>}
             <div className="preview-footer">
               <p>{message || "Змены будуць выкананы толькі пасля пацвярджэння."}</p>
-              <button className="button primary" disabled={!planId || !selectedCount || Boolean(busy)} onClick={prepareApply}>{mode === "rename" ? "Перайменаваць" : "Перамясціць"} {selectedCount || ""} файлаў</button>
+              {busy === "analysis" ? (
+                <button className="button danger" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>
+              ) : (
+                <button className="button primary" disabled={!planId || !selectedCount || Boolean(busy)} onClick={prepareApply}>{mode === "rename" ? "Перайменаваць" : "Перамясціць"} {selectedCount || ""} файлаў</button>
+              )}
             </div>
           </section>
         </div>
