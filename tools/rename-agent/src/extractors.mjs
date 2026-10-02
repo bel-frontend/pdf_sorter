@@ -58,7 +58,7 @@ async function readDocSafe(filePath) {
   }
 }
 
-async function readPdfOrImageSafe(filePath, required = true) {
+async function readPdfOrImageSafe(filePath, required = true, signal) {
   const workspaceRoot = path.resolve(MODULE_DIR, "../../..");
   const venvPython = path.join(workspaceRoot, ".venv", "bin", "python");
   const configuredPython = process.env.READER_PYTHON;
@@ -98,7 +98,8 @@ async function readPdfOrImageSafe(filePath, required = true) {
         ],
         {
           maxBuffer: 20 * 1024 * 1024,
-          timeout: 120_000,
+          timeout: 300_000,
+          ...(signal ? { signal } : {}),
         },
       );
 
@@ -111,16 +112,23 @@ async function readPdfOrImageSafe(filePath, required = true) {
         return text.slice(0, 12000);
       }
     } catch (err) {
-      errors.push(`${python}: ${err.message || err}`);
+      if (err?.name === "AbortError" || signal?.aborted) throw err;
+      const detail = err?.killed
+        ? `reader timed out after 300 seconds`
+        : err.message || err;
+      errors.push(`${python}: ${detail}`);
       console.error(
-        `[reader] ${path.basename(filePath)}: ${python} failed — ${err.message || err}`,
+        `[reader] ${path.basename(filePath)}: ${python} failed — ${detail}`,
       );
       // try next python candidate
     }
   }
 
   if (!required) return "";
-  throw new Error(`Document reader unavailable for ${path.basename(filePath)}. ${errors.join(" | ")}`);
+  const timedOut = errors.some((item) => /timed out/i.test(item));
+  throw new Error(
+    `${timedOut ? "Document reader timed out" : "Document reader unavailable"} for ${path.basename(filePath)}. ${errors.join(" | ")}`,
+  );
 }
 
 export async function extractContent(filePath, options = {}) {
@@ -139,12 +147,12 @@ export async function extractContent(filePath, options = {}) {
   }
 
   if (ext === ".pdf") {
-    return readPdfOrImageSafe(filePath, true);
+    return readPdfOrImageSafe(filePath, true, options.signal);
   }
 
   if (imageExt.has(ext)) {
     if (options.imageOcr === false) return "";
-    return readPdfOrImageSafe(filePath, false);
+    return readPdfOrImageSafe(filePath, false, options.signal);
   }
 
   return "";

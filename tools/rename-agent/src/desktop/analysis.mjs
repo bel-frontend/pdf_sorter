@@ -135,12 +135,12 @@ async function suggestRename(llm, visionLlm, filePath, options, signal) {
         response = await invoke(llm, imageInput, signal);
       } catch (mainVisionError) {
         if (mainVisionError?.name === "AbortError") throw mainVisionError;
-        const content = await extractContent(filePath, { imageOcr: false });
+        const content = await extractContent(filePath, { imageOcr: false, signal });
         response = await invoke(llm, renamePrompt(filePath, options, content), signal);
       }
     }
   } else {
-    const content = await extractContent(filePath);
+    const content = await extractContent(filePath, { signal });
     response = await invoke(llm, renamePrompt(filePath, options, content), signal);
   }
   return renameSchema.parse(parseJson(response?.content));
@@ -195,7 +195,7 @@ async function classifyFile(llm, visionLlm, filePath, options, signal) {
         response = await invoke(llm, imageInput, signal);
       } catch (mainVisionError) {
         if (mainVisionError?.name === "AbortError") throw mainVisionError;
-        const content = await extractContent(filePath, { imageOcr: false });
+        const content = await extractContent(filePath, { imageOcr: false, signal });
         response = await invoke(
           llm,
           categoryPrompt(
@@ -209,7 +209,7 @@ async function classifyFile(llm, visionLlm, filePath, options, signal) {
       }
     }
   } else {
-    const content = await extractContent(filePath);
+    const content = await extractContent(filePath, { signal });
     response = await invoke(
       llm,
       categoryPrompt(
