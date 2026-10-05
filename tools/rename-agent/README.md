@@ -36,6 +36,11 @@ Python і мовы OCR задаюцца ў блоку «Мадэль». API-кл
 
 ### Загрузка вынікаў у Google Drive
 
+Desktop GUI прапускае службовыя файлы macOS (`._*`, `.DS_Store`, `__MACOSX`)
+і распазнае AppleDouble па загалоўку нават пасля змены назвы. PDF і DOCX
+правяраюцца па змесціве перад аналізам, зменай шляху і загрузкай у Drive.
+Пры няўдалым чытанні або vision-аналізе прапанова толькі па назве не ствараецца.
+
 1. У Google Cloud уключы **Google Drive API**.
 2. Ствары OAuth Client ID тыпу **Desktop app**.
 3. У «Налады → Google Drive» устаў Client ID і Client Secret, затым націсні

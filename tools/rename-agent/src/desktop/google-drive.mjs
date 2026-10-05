@@ -2,6 +2,8 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 
+import { assertSafeDocument } from "./file-safety.mjs";
+
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -82,6 +84,7 @@ export async function ensureDriveFolder(accessToken, name, parentId = "root") {
 }
 
 export async function uploadFileToDrive(accessToken, filePath, parentId) {
+  await assertSafeDocument(filePath);
   const name = path.basename(filePath);
   const existing = await findChild(accessToken, parentId, name);
   if (existing) return { ...existing, skipped: true };

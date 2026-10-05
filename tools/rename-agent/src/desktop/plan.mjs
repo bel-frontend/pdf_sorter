@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { assertSafeDocument } from "./file-safety.mjs";
+
 function normalizeKey(value) {
   return path.resolve(value).toLocaleLowerCase();
 }
@@ -124,6 +126,12 @@ export async function validateOperations(operations, initialErrors = []) {
       errors.push({ id: operation.id, message: "Зыходны файл больш не існуе" });
       continue;
     }
+    try {
+      await assertSafeDocument(operation.from);
+    } catch (error) {
+      errors.push({ id: operation.id, message: error.message });
+      continue;
+    }
     if (
       normalizeKey(operation.from) !== normalizeKey(operation.to) &&
       (await pathExists(operation.to))
@@ -153,6 +161,7 @@ export async function applyOperations(operations, onProgress = () => {}) {
   const failures = [];
   for (const [index, operation] of operations.entries()) {
     try {
+      await assertSafeDocument(operation.from);
       const method = await moveFile(operation.from, operation.to);
       if (method !== "skip") completed.push(operation);
       onProgress({

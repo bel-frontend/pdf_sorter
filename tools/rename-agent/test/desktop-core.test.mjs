@@ -28,7 +28,7 @@ async function temporaryDirectory(t) {
 test("expands folders recursively, filters formats, and removes duplicates", async (t) => {
   const root = await temporaryDirectory(t);
   await fs.mkdir(path.join(root, "nested"));
-  await fs.writeFile(path.join(root, "invoice.pdf"), "pdf");
+  await fs.writeFile(path.join(root, "invoice.pdf"), "%PDF-1.4\npdf");
   await fs.writeFile(path.join(root, "nested", "photo.JPG"), "image");
   await fs.writeFile(path.join(root, "notes.txt"), "ignored");
 
@@ -131,7 +131,7 @@ test("applies a batch and undoes the last successful operation", async (t) => {
   const source = path.join(root, "old.pdf");
   const target = path.join(root, "sorted", "new.pdf");
   const history = path.join(root, "state", "last-operation.json");
-  await fs.writeFile(source, "payload");
+  await fs.writeFile(source, "%PDF-1.4\npayload");
 
   const applied = await applyOperations([{ id: "one", from: source, to: target }]);
   assert.equal(applied.completed.length, 1);
@@ -140,7 +140,7 @@ test("applies a batch and undoes the last successful operation", async (t) => {
 
   const undone = await undoLastOperation(history);
   assert.equal(undone.failures.length, 0);
-  assert.equal(await fs.readFile(source, "utf8"), "payload");
+  assert.equal(await fs.readFile(source, "utf8"), "%PDF-1.4\npayload");
   assert.equal(await readLastOperation(history), null);
 });
 

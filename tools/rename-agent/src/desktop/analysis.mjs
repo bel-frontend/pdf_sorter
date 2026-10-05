@@ -12,6 +12,8 @@ import {
   sanitizeNamePart,
 } from "./plan.mjs";
 
+import { assertSafeDocument, assertReadableContent } from "./file-safety.mjs";
+
 const IMAGE_MIME = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -135,12 +137,15 @@ async function suggestRename(llm, visionLlm, filePath, options, signal) {
         response = await invoke(llm, imageInput, signal);
       } catch (mainVisionError) {
         if (mainVisionError?.name === "AbortError") throw mainVisionError;
-        const content = await extractContent(filePath, { imageOcr: false, signal });
-        response = await invoke(llm, renamePrompt(filePath, options, content), signal);
+        throw new Error(
+          "Vision-аналіз не атрымаўся; прапанова толькі па назве адключана",
+          { cause: mainVisionError },
+        );
       }
     }
   } else {
     const content = await extractContent(filePath, { signal });
+    assertReadableContent(content);
     response = await invoke(llm, renamePrompt(filePath, options, content), signal);
   }
   return renameSchema.parse(parseJson(response?.content));
@@ -195,21 +200,15 @@ async function classifyFile(llm, visionLlm, filePath, options, signal) {
         response = await invoke(llm, imageInput, signal);
       } catch (mainVisionError) {
         if (mainVisionError?.name === "AbortError") throw mainVisionError;
-        const content = await extractContent(filePath, { imageOcr: false, signal });
-        response = await invoke(
-          llm,
-          categoryPrompt(
-            filePath,
-            options.categories,
-            options.instructions,
-            content.slice(0, 5000),
-          ),
-          signal,
+        throw new Error(
+          "Vision-аналіз не атрымаўся; прапанова толькі па назве адключана",
+          { cause: mainVisionError },
         );
       }
     }
   } else {
     const content = await extractContent(filePath, { signal });
+    assertReadableContent(content);
     response = await invoke(
       llm,
       categoryPrompt(
@@ -265,6 +264,7 @@ export async function analyzeRename(files, options, hooks = {}) {
       filePath,
     });
     try {
+      await assertSafeDocument(filePath);
       const suggestion = await suggestRename(
         llm,
         visionLlm,
@@ -347,6 +347,7 @@ export async function analyzeOrganize(files, options, hooks = {}) {
       filePath,
     });
     try {
+      await assertSafeDocument(filePath);
       const result = await classifyFile(
         llm,
         visionLlm,

@@ -513,7 +513,7 @@ function App() {
                   </div>
                 </div>
               )}
-              {rejected.length > 0 && <p className="hint warning">Прапушчана непадтрымліваемых: {rejected.length}</p>}
+              {rejected.length > 0 && <p className="hint warning">Прапушчана: службовых macOS {rejected.filter(item => item.reason === "mac_metadata").length}; няправільных дакументаў {rejected.filter(item => item.reason === "invalid_document").length}; іншых {rejected.filter(item => !["mac_metadata", "invalid_document"].includes(item.reason)).length}</p>}
             </section>
 
             {mode === "organize" && (
@@ -583,7 +583,7 @@ function App() {
               </div>
             )}
 
-            {failures.length > 0 && <div className="failure-box"><strong>Не атрымалася прааналізаваць: {failures.length} з {files.length}</strong>{[...new Map(failures.map((failure) => [failure.error, failure])).values()].slice(0, 3).map((failure) => <p key={`${failure.sourcePath}-${failure.error}`}>{failure.error}</p>)}{failures.length > 3 && <small>Памылкі згрупаваныя; праграма знайшла ўсе {files.length} файлаў.</small>}</div>}
+            {failures.length > 0 && <div className="failure-box"><strong>Не атрымалася прааналізаваць: {failures.length} з {files.length}</strong>{[...new Map(failures.map((failure) => [failure.error, failure])).values()].slice(0, 3).map((failure) => <p key={`${failure.sourcePath}-${failure.error}`}>{basename(failure.sourcePath)} — {failure.error}</p>)}{failures.length > 3 && <small>Памылкі згрупаваныя; праграма знайшла ўсе {files.length} файлаў.</small>}</div>}
             <div className="preview-footer">
               <p>{message || "Змены будуць выкананы толькі пасля пацвярджэння."}</p>
               {busy === "analysis" ? (

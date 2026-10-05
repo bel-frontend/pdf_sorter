@@ -21,7 +21,7 @@ test("uploads a sorted file into matching Drive folders", async (t) => {
   const sortedDirectory = path.join(root, "certificates");
   const filePath = path.join(sortedDirectory, "certificate.pdf");
   await fs.mkdir(sortedDirectory);
-  await fs.writeFile(filePath, "pdf payload");
+  await fs.writeFile(filePath, "%PDF-1.4\npdf payload");
 
   const originalFetch = globalThis.fetch;
   const calls = [];
