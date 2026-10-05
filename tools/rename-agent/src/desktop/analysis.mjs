@@ -13,6 +13,7 @@ import {
 } from "./plan.mjs";
 
 import { assertSafeDocument, assertReadableContent } from "./file-safety.mjs";
+import { classificationContext, renameContext } from './analysis-cache.mjs';
 
 const IMAGE_MIME = {
   ".jpg": "image/jpeg",
@@ -32,6 +33,7 @@ const renameSchema = z.object({
   date: z.string().optional().default(""),
   summary: z.string().min(1).max(1000),
   confidence: z.coerce.number().min(0).max(1).catch(0.35),
+  sortingCategory: z.string().optional(),
 });
 
 const categorySchema = z.object({
@@ -95,7 +97,9 @@ function renamePrompt(filePath, options, content) {
   const language = LANGUAGE_NAMES[options.language] || LANGUAGE_NAMES.en;
   return [
     "You create structured metadata for a safe file name.",
-    'Return ONLY JSON: {"category":"...","topic":"...","person":"...","date":"...","summary":"...","confidence":0.0}.',
+    'Return ONLY JSON: {"category":"...","topic":"...","person":"...","date":"...","summary":"...","confidence":0.0,"sortingCategory":"..."}.',
+    `Also choose sortingCategory from exactly these allowed folders: ${normalizeCategories(options.categories).join(', ')}. Use other when uncertain.`,
+    options.sortingInstructions ? `Instructions for sortingCategory only: ${options.sortingInstructions}` : '',
     `Use ${language} for category and topic, transliterated to ASCII-compatible Latin letters.`,
     "category and topic must be concise lowercase snake_case fragments.",
     "person is a surname or surname_name when clearly present, otherwise empty.",
@@ -110,9 +114,10 @@ function renamePrompt(filePath, options, content) {
     .join("\n");
 }
 
-async function suggestRename(llm, visionLlm, filePath, options, signal) {
+async function suggestRename(llm, visionLlm, filePath, options, signal, reader = extractContent, cachedText) {
   const extension = path.extname(filePath).toLowerCase();
   let response;
+  let extractedText = cachedText;
   if (IMAGE_MIME[extension]) {
     const bytes = await fs.readFile(filePath);
     const imageInput = [
@@ -144,11 +149,12 @@ async function suggestRename(llm, visionLlm, filePath, options, signal) {
       }
     }
   } else {
-    const content = await extractContent(filePath, { signal });
+    const content = cachedText ?? await reader(filePath, { signal });
     assertReadableContent(content);
+    extractedText = content.slice(0, 8000);
     response = await invoke(llm, renamePrompt(filePath, options, content), signal);
   }
-  return renameSchema.parse(parseJson(response?.content));
+  return { suggestion: renameSchema.parse(parseJson(response?.content)), extractedText };
 }
 
 function categoryPrompt(filePath, categories, instructions, content) {
@@ -165,9 +171,10 @@ function categoryPrompt(filePath, categories, instructions, content) {
     .join("\n");
 }
 
-async function classifyFile(llm, visionLlm, filePath, options, signal) {
+async function classifyFile(llm, visionLlm, filePath, options, signal, reader = extractContent) {
   const extension = path.extname(filePath).toLowerCase();
   let response;
+  let extractedText;
 
   if (IMAGE_MIME[extension]) {
     const bytes = await fs.readFile(filePath);
@@ -207,8 +214,9 @@ async function classifyFile(llm, visionLlm, filePath, options, signal) {
       }
     }
   } else {
-    const content = await extractContent(filePath, { signal });
+    const content = await reader(filePath, { signal });
     assertReadableContent(content);
+    extractedText = content.slice(0, 8000);
     response = await invoke(
       llm,
       categoryPrompt(
@@ -226,7 +234,32 @@ async function classifyFile(llm, visionLlm, filePath, options, signal) {
   return {
     ...parsed,
     category: options.categories.includes(normalized) ? normalized : "other",
+    extractedText,
   };
+}
+
+function lazyModels(options, hooks) {
+  let models;
+  return () => {
+    if (models) return models;
+    const factory = hooks.buildChatModel || buildChatModel;
+    const llm = factory(modelConfig(options));
+    let visionLlm = llm;
+    try { visionLlm = factory({ provider: options.visionProvider, model: options.visionModel, ollamaBaseUrl: options.ollamaBaseUrl }); }
+    catch { /* Text analysis remains available. */ }
+    return models = { llm, visionLlm };
+  };
+}
+
+async function classifyMetadata(llm, filePath, options, metadata, signal) {
+  const evidence = [metadata.extractedText, metadata.rename && JSON.stringify(metadata.rename),
+    ...Object.values(metadata.classifications || {}).map(item => JSON.stringify(item))].filter(Boolean).join('\n');
+  assertReadableContent(evidence);
+  const response = await invoke(llm, categoryPrompt(filePath, options.categories, options.instructions,
+    `Verified content metadata from an earlier analysis (not guesses from the filename):\n${evidence.slice(0, 10000)}`), signal);
+  const parsed = categorySchema.parse(parseJson(response?.content));
+  const category = sanitizeCategory(parsed.category);
+  return { ...parsed, category: options.categories.includes(category) ? category : 'other' };
 }
 
 export function normalizeCategories(values) {
@@ -236,17 +269,11 @@ export function normalizeCategories(values) {
 }
 
 export async function analyzeRename(files, options, hooks = {}) {
-  const llm = buildChatModel(modelConfig(options));
-  let visionLlm = llm;
-  try {
-    visionLlm = buildChatModel({
-      provider: options.visionProvider,
-      model: options.visionModel,
-      ollamaBaseUrl: options.ollamaBaseUrl,
-    });
-  } catch {
-    // Filename/text analysis remains available if a vision model cannot initialize.
-  }
+  const getModels = lazyModels(options, hooks);
+  const categories = normalizeCategories(options.categories);
+  const sortingContext = classificationContext(categories, options.sortingInstructions);
+  const namingContext = renameContext(options);
+  let reused = 0;
   const reserved = new Set();
   const rows = [];
   const failures = [];
@@ -265,13 +292,31 @@ export async function analyzeRename(files, options, hooks = {}) {
     });
     try {
       await assertSafeDocument(filePath);
-      const suggestion = await suggestRename(
-        llm,
-        visionLlm,
-        filePath,
-        options,
-        hooks.signal,
-      );
+      const cached = await hooks.cache?.get(filePath, hooks.signal);
+      const metadata = options.reuseAnalysis === false ? null : cached?.metadata;
+      let suggestion, extractedText, reuseSource;
+      const classifications = { ...metadata?.classifications };
+      if (metadata?.rename && metadata.renameContext === namingContext) {
+        suggestion = metadata.rename;
+        extractedText = metadata.extractedText;
+        reuseSource = 'metadata';
+      } else {
+        const models = getModels();
+        ({ suggestion, extractedText } = await suggestRename(
+          models.llm, models.visionLlm, filePath, options, hooks.signal,
+          hooks.extractContent || extractContent, metadata?.extractedText));
+        if (metadata?.extractedText && !IMAGE_MIME[path.extname(filePath).toLowerCase()]) reuseSource = 'text';
+        const sortingCategory = suggestion.sortingCategory && sanitizeCategory(suggestion.sortingCategory);
+        if (sortingCategory && categories.includes(sortingCategory)) {
+          classifications[sortingContext] = { category: sortingCategory,
+            reason: suggestion.summary, confidence: suggestion.confidence };
+        }
+      }
+      if (cached) await hooks.cache.put(filePath, cached.fingerprint, {
+        ...metadata, rename: suggestion, renameContext: namingContext,
+        extractedText, classifications,
+      }, hooks.signal);
+      if (reuseSource) reused++;
       const extension = path.extname(filePath).toLowerCase();
       const fields = {
         category: sanitizeNamePart(suggestion.category, "document"),
@@ -293,6 +338,7 @@ export async function analyzeRename(files, options, hooks = {}) {
         proposedName: path.basename(targetPath),
         targetPath,
         summary: suggestion.summary.slice(0, 240),
+        reuseSource,
         confidence: suggestion.confidence,
       });
     } catch (error) {
@@ -315,22 +361,14 @@ export async function analyzeRename(files, options, hooks = {}) {
     current: rows.length + failures.length,
     total: files.length,
   });
-  return { rows, failures, cancelled };
+  return { rows, failures, cancelled, reused };
 }
 
 export async function analyzeOrganize(files, options, hooks = {}) {
   const categories = normalizeCategories(options.categories);
-  const llm = buildChatModel(modelConfig(options));
-  let visionLlm = llm;
-  try {
-    visionLlm = buildChatModel({
-      provider: options.visionProvider,
-      model: options.visionModel,
-      ollamaBaseUrl: options.ollamaBaseUrl,
-    });
-  } catch {
-    // Text/OCR classification remains available when the vision model is not.
-  }
+  const getModels = lazyModels(options, hooks);
+  const context = classificationContext(categories, options.instructions);
+  let reused = 0;
   const reserved = new Set();
   const rows = [];
   const failures = [];
@@ -349,13 +387,27 @@ export async function analyzeOrganize(files, options, hooks = {}) {
     });
     try {
       await assertSafeDocument(filePath);
-      const result = await classifyFile(
-        llm,
-        visionLlm,
-        filePath,
-        { ...options, categories },
-        hooks.signal,
-      );
+      const cached = await hooks.cache?.get(filePath, hooks.signal);
+      const metadata = options.reuseAnalysis === false ? null : cached?.metadata;
+      const prior = metadata?.classifications?.[context];
+      let result, reuseSource;
+      if (prior && categories.includes(prior.category)) {
+        result = prior;
+        reuseSource = 'category';
+      } else if (metadata) {
+        result = await classifyMetadata(getModels().llm, filePath, { ...options, categories }, metadata, hooks.signal);
+        reuseSource = 'metadata';
+      } else {
+        const models = getModels();
+        result = await classifyFile(models.llm, models.visionLlm, filePath,
+          { ...options, categories }, hooks.signal, hooks.extractContent || extractContent);
+      }
+      if (cached) await hooks.cache.put(filePath, cached.fingerprint, {
+        ...metadata, extractedText: result.extractedText ?? metadata?.extractedText,
+        classifications: { ...metadata?.classifications, [context]: {
+          category: result.category, reason: result.reason, confidence: result.confidence } },
+      }, hooks.signal);
+      if (reuseSource) reused++;
       const desired = path.join(
         options.destination,
         result.category,
@@ -368,6 +420,7 @@ export async function analyzeOrganize(files, options, hooks = {}) {
         category: result.category,
         targetPath,
         summary: result.reason.slice(0, 240),
+        reuseSource,
         confidence: result.confidence,
       });
     } catch (error) {
@@ -390,5 +443,5 @@ export async function analyzeOrganize(files, options, hooks = {}) {
     current: rows.length + failures.length,
     total: files.length,
   });
-  return { rows, failures, categories, cancelled };
+  return { rows, failures, categories, cancelled, reused };
 }

@@ -182,6 +182,8 @@ textarea { resize: vertical; line-height: 1.45; }
 .operation-report summary { cursor: pointer; font-size: 12px; }
 .report-filter { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 12px; }
 .report-filter input { width: auto; }
+.reuse-analysis { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.reuse-analysis input { width: auto; }
 .report-table-wrap { max-height: 360px; overflow: auto; }
 .report-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; }
 .report-table th, .report-table td { text-align: left; vertical-align: top; padding: 10px; border-bottom: 1px solid #e5e3dc; overflow-wrap: anywhere; }

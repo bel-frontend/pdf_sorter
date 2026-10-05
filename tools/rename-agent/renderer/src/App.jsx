@@ -36,6 +36,7 @@ function App() {
   });
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [report, setReport] = useState(null);
+  const [reuseAnalysis, setReuseAnalysis] = useState(true);
 
   useEffect(() => {
     api.getConfig().then(async (data) => {
@@ -288,7 +289,7 @@ function App() {
   async function analyze() {
     if (!files.length) return setMessage("Спачатку дадай файлы або папку");
     if (mode === "organize" && !destination) return setMessage("Выберы папку выніку");
-    if (!providerReady) {
+    if (!providerReady && !reuseAnalysis) {
       setMessage(`Для ${settings.provider} трэба захаваць API-ключ`);
       setPage("settings");
       return;
@@ -314,6 +315,8 @@ function App() {
         pattern: settings.pattern,
         categories,
         instructions: settings[instructionKey] || "",
+        sortingInstructions: settings.organizeInstructions || '',
+        reuseAnalysis,
       });
       setPlanId(result.planId);
       setRows(result.rows.map((row) => ({ ...row, selected: true, status: "ready" })));
@@ -324,7 +327,7 @@ function App() {
           ? `Не атрымалася стварыць план: памылак ${result.failures.length}`
           : result.cancelled
           ? `Аналіз спынены. У плане засталося ${result.rows.length} файлаў`
-          : `План гатовы: ${result.rows.length} файлаў`,
+          : `План гатовы: ${result.rows.length} файлаў. Выкарыстаны захаваны аналіз: ${result.reused || 0}`,
       );
     } catch (error) {
       setMessage(error.message || String(error));
@@ -609,6 +612,8 @@ function App() {
               <label>Дадатковая інструкцыя<textarea rows="4" placeholder={mode === "rename" ? "Напрыклад: для рахункаў заўсёды ўказвай кампанію…" : "Напрыклад: усе дакументы ZUS складвай у taxes_and_social…"} value={settings[instructionKey] || ""} onChange={(e) => updateSetting(instructionKey, e.target.value)} /></label>
             </section>
 
+            <label className="reuse-analysis"><input type="checkbox" checked={reuseAnalysis} disabled={Boolean(busy)} onChange={event => setReuseAnalysis(event.target.checked)} /> Выкарыстоўваць захаваны аналіз</label>
+            <p className="hint">Без паўторнага OCR для нязмененых файлаў. Здымі адзнаку, каб прааналізаваць нанова.</p>
             <button className="button primary analyze" disabled={Boolean(busy) || !files.length} onClick={analyze}>
               {busy === "analysis" ? "Аналізуем…" : "Стварыць план →"}
             </button>
@@ -630,7 +635,7 @@ function App() {
                   <tbody>{rows.map((row) => (
                     <tr key={row.id} className={`${row.selected === false ? "disabled-row" : ""} ${row.status || ""}`}>
                       <td><input disabled={Boolean(busy)} type="checkbox" checked={row.selected !== false} onChange={(e) => editRow(row.id, { selected: e.target.checked })} /></td>
-                      <td><button className="file-open" onClick={() => openPreviewFile(row.id)} title="Адкрыць зыходны файл"><span>↗</span><strong>{basename(row.sourcePath)}</strong></button><small>{dirname(row.sourcePath)}</small>{row.summary && <p>{row.summary}</p>}</td>
+                      <td><button className="file-open" onClick={() => openPreviewFile(row.id)} title="Адкрыць зыходны файл"><span>↗</span><strong>{basename(row.sourcePath)}</strong></button><small>{dirname(row.sourcePath)}</small>{row.summary && <p>{row.summary}</p>}{row.reuseSource && <small className="cached-analysis">З захаванага аналізу</small>}</td>
                       <td>{mode === "rename" ? <input disabled={Boolean(busy)} className={errors[row.id] ? "invalid" : ""} value={row.proposedName} onChange={(e) => editRow(row.id, { proposedName: e.target.value })} /> : <select disabled={Boolean(busy)} className={errors[row.id] ? "invalid" : ""} value={row.category} onChange={(e) => editRow(row.id, { category: e.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select>}{errors[row.id] && <span className="row-error">{errors[row.id]}</span>}{mode === "organize" && row.targetPath && <small title={row.targetPath}>→ {basename(row.targetPath)}</small>}{row.status === "completed" && <span className="row-success">✓ Гатова</span>}{row.status === "processing" && <span className="row-processing">Выконваецца…</span>}{row.status === "failed" && <span className="row-error">Не выканана</span>}</td>
                       <td><span className="confidence"><i style={{ width: `${Math.round((row.confidence || 0) * 100)}%` }} /></span><small>{Math.round((row.confidence || 0) * 100)}%</small></td>
                     </tr>

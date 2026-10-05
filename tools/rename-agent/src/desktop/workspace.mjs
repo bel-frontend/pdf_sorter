@@ -15,6 +15,7 @@ export const workspaceSchema = z.object({
     category: z.string().optional(), summary: z.string().default(''),
     confidence: z.number().default(0), selected: z.boolean().default(true),
     status: z.string().default('ready'),
+    reuseSource: z.string().optional(),
   })),
   failures: z.array(z.object({ sourcePath: z.string(), error: z.string() })).default([]),
 });

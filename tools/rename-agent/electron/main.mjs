@@ -32,6 +32,7 @@ import {
 } from "../src/desktop/history.mjs";
 import { readWorkspace, saveWorkspace } from '../src/desktop/workspace.mjs';
 import { createReport, updateReport, writeReport, readReport, reportFromJournal, reportCsv } from '../src/desktop/report.mjs';
+import { createAnalysisCache } from '../src/desktop/analysis-cache.mjs';
 import {
   ensureDriveFolder,
   uploadSortedOperations,
@@ -79,6 +80,8 @@ const analyzeSchema = z.object({
   pattern: z.string().min(1).max(200).default("{category}_{topic}_{date}"),
   categories: z.array(z.string()).default(DEFAULT_CATEGORIES),
   instructions: z.string().max(5000).default(""),
+  sortingInstructions: z.string().max(5000).default(''),
+  reuseAnalysis: z.boolean().default(true),
 });
 
 const editSchema = z.object({
@@ -670,6 +673,7 @@ ipcMain.handle("analysis:start", async (_event, rawOptions) => {
   activeController = new AbortController();
   const onProgress = (progress) => sendProgress("analysis:progress", progress);
   const planId = randomUUID();
+  const cache = createAnalysisCache(path.join(app.getPath('userData'), 'analysis-cache'));
   const onCheckpoint = async ({ rows, failures }) => {
     await saveWorkspace(workspacePath(), {
       version: 1, planId, mode: options.mode, files: options.files,
@@ -685,11 +689,13 @@ ipcMain.handle("analysis:start", async (_event, rawOptions) => {
             signal: activeController.signal,
             onProgress,
             onCheckpoint,
+            cache,
           })
         : await analyzeOrganize(options.files, options, {
             signal: activeController.signal,
             onProgress,
             onCheckpoint,
+            cache,
           });
     const categories = normalizeCategories(result.categories || options.categories);
     plans.set(planId, {
