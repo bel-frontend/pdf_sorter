@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import SettingsPage from "./SettingsPage.jsx";
+import OperationReport from "./OperationReport.jsx";
 
 const api = window.renameDesktop;
 
@@ -33,18 +34,40 @@ function App() {
     openrouter: "",
     googleDriveClientSecret: "",
   });
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [report, setReport] = useState(null);
 
   useEffect(() => {
-    api.getConfig().then((data) => {
+    api.getConfig().then(async (data) => {
       setConfig(data);
       setSettings(data.settings);
       setCategories(data.settings.categories || []);
       setDestination(data.settings.lastDestination || "");
       setCanUndo(data.canUndo);
       setCanUploadToDrive(data.canUploadToDrive);
+      let snapshot = await api.getWorkspace();
+      const recovered = localStorage.getItem('filegarden:recovered-workspace');
+      if (recovered) {
+        snapshot = await api.saveWorkspace(JSON.parse(recovered));
+        localStorage.removeItem('filegarden:recovered-workspace');
+      }
+      if (snapshot) {
+        setMode(snapshot.mode); setFiles(snapshot.files);
+        setDestination(snapshot.destination); setCategories(snapshot.categories);
+        setPlanId(snapshot.planId); setRows(snapshot.rows); setFailures(snapshot.failures);
+        setMessage(`Аднавіўся захаваны план: ${snapshot.rows.length} файлаў`);
+      }
+      setWorkspaceReady(true);
+      api.getReport().then(setReport).catch(error => setMessage(`Не атрымалася адкрыць справаздачу: ${error.message}`));
+    }).catch(error => {
+      setMessage(`Не атрымалася аднавіць план: ${error.message}`);
     });
     const offAnalysis = api.onAnalysisProgress(setProgress);
-    const offApply = api.onApplyProgress(setProgress);
+    const offApply = api.onApplyProgress((event) => {
+      setProgress(event);
+      setRows(current => current.map(row => row.id === event.id
+        ? { ...row, status: event.status } : row));
+    });
     const offUndo = api.onUndoProgress(setProgress);
     const offDrive = api.onDriveProgress(setProgress);
     return () => {
@@ -54,6 +77,15 @@ function App() {
       offDrive();
     };
   }, []);
+
+  useEffect(() => {
+    if (!workspaceReady || busy) return;
+    const snapshot = { version: 1, mode, files, destination, categories, planId, rows, failures };
+    const timer = setTimeout(() => {
+      api.saveWorkspace(snapshot).catch(error => setMessage(`План не захаваны: ${error.message}`));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [workspaceReady, busy, mode, files, destination, categories, planId, rows, failures]);
 
   const selectedCount = rows.filter((row) => row.selected !== false).length;
   const providerReady =
@@ -98,11 +130,29 @@ function App() {
 
   async function chooseDestination() {
     const picked = await api.pickDestination();
-    if (!picked) return;
-    setDestination(picked);
-    const existing = await api.existingCategories(picked);
-    setCategories((current) => [...new Set([...current, ...existing, "other"])]);
-    resetPlan();
+    if (!picked || picked === destination) return;
+    setBusy("destination");
+    setConfirming(false);
+    try {
+      const existing = await api.existingCategories(picked);
+      const nextCategories = [...new Set([...categories, ...existing, "other"])];
+      // Content analysis remains valid. Only pending destinations need rebuilding.
+      const nextRows = rows.map(row => row.status === "completed"
+        ? row : { ...row, targetPath: undefined });
+      await api.saveWorkspace({ version: 1, mode, files, destination: picked,
+        categories: nextCategories, planId, rows: nextRows, failures });
+      setDestination(picked);
+      setCategories(nextCategories);
+      setRows(nextRows);
+      setErrors({});
+      setMessage(rows.length
+        ? "Папка выніку зменена. План захаваны; новыя шляхі будуць правераныя перад перамяшчэннем."
+        : "Папка выніку зменена");
+    } catch (error) {
+      setMessage(`Не атрымалася змяніць папку выніку: ${error.message || error}`);
+    } finally {
+      setBusy("");
+    }
   }
 
   async function choosePython() {
@@ -314,12 +364,15 @@ function App() {
   async function prepareApply() {
     if (!selectedCount) return;
     try {
+      await api.saveWorkspace({ version: 1, mode, files, destination, categories, planId, rows, failures });
       const result = await api.validatePlan(payload);
       if (!result.valid) {
         setErrors(Object.fromEntries(result.errors.map((item) => [item.id, item.message])));
-        setMessage("Выпраў памылкі ў плане перад ужываннем");
+        setMessage(`План захаваны. Памылак праверкі: ${result.errors.length}. ${result.errors.slice(0, 3).map(item => `${basename(rows.find(row => row.id === item.id)?.sourcePath)}: ${item.message}`).join('; ')}`);
         return;
       }
+      const targets = new Map(result.operations.map(operation => [operation.id, operation.to]));
+      setRows(current => current.map(row => ({ ...row, targetPath: targets.get(row.id) || row.targetPath })));
       setConfirming(true);
     } catch (error) {
       setMessage(error.message || String(error));
@@ -334,9 +387,11 @@ function App() {
       const result = await api.applyPlan(payload);
       if (!result.valid) {
         setErrors(Object.fromEntries(result.errors.map((item) => [item.id, item.message])));
+        setMessage(`План захаваны; выпраў памылкі праверкі: ${result.errors.length}`);
         return;
       }
       const completed = new Set(result.completed.map((item) => item.id));
+      setReport(result.report);
       const completedOperations = new Map(
         result.completed.map((item) => [item.id, item]),
       );
@@ -370,6 +425,15 @@ function App() {
       setMessage(error.message || String(error));
     } finally {
       setBusy("");
+    }
+  }
+
+  async function exportReport(format) {
+    try {
+      const result = await api.exportReport(format);
+      if (result) setMessage(`Справаздача захавана: ${result.filePath}`);
+    } catch (error) {
+      setMessage(`Не атрымалася захаваць справаздачу: ${error.message || error}`);
     }
   }
 
@@ -429,7 +493,7 @@ function App() {
   if (!config) return <div className="loading">Адкрываем File Garden…</div>;
 
   return (
-    <div className={`app-shell platform-${api.platform}`}>
+    <div className={`app-shell platform-${api.platform} ${busy && progress.total > 0 ? 'with-progress' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">FG</div>
@@ -481,6 +545,8 @@ function App() {
           </div>
         </section>
 
+        {!busy && <OperationReport report={report} busy={Boolean(busy)} exportReport={exportReport} />}
+
         <div className="workspace-grid">
           <aside className="control-column">
             <section className="card">
@@ -519,7 +585,7 @@ function App() {
             {mode === "organize" && (
               <section className="card">
                 <div className="section-heading"><span>02</span><h3>Папка выніку</h3></div>
-                <button className="path-picker" onClick={chooseDestination}>
+                <button className="path-picker" disabled={Boolean(busy)} onClick={chooseDestination}>
                   <span>◎</span><div><strong>{destination ? basename(destination) : "Выбраць папку"}</strong><small>{destination || "Файлы будуць перанесены сюды"}</small></div>
                 </button>
               </section>
@@ -555,16 +621,6 @@ function App() {
               {rows.length > 0 && <span className="selection-count">Выбрана {selectedCount} з {rows.length}</span>}
             </div>
 
-            {busy && progress.total > 0 && (
-              <div className="progress-wrap">
-                <div>
-                  <span>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : busy === "drive" ? "Загрузка ў Google Drive" : "Змяненне файлаў"}</span>
-                  <span className="progress-actions"><strong>{progress.current}/{progress.total}</strong>{busy === "analysis" && <button className="stop-analysis" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>}</span>
-                </div>
-                <progress value={progress.current} max={progress.total} />
-              </div>
-            )}
-
             {rows.length === 0 ? (
               <div className="empty-preview"><div>⌁</div><h4>Тут з’явіцца план</h4><p>Дадай файлы, апішы правілы і запусці аналіз. Нічога не зменіцца без твайго пацвярджэння.</p></div>
             ) : (
@@ -573,9 +629,9 @@ function App() {
                   <thead><tr><th></th><th>Зыходны файл</th><th>{mode === "rename" ? "Новая назва" : "Катэгорыя"}</th><th>Упэўненасць</th></tr></thead>
                   <tbody>{rows.map((row) => (
                     <tr key={row.id} className={`${row.selected === false ? "disabled-row" : ""} ${row.status || ""}`}>
-                      <td><input type="checkbox" checked={row.selected !== false} onChange={(e) => editRow(row.id, { selected: e.target.checked })} /></td>
+                      <td><input disabled={Boolean(busy)} type="checkbox" checked={row.selected !== false} onChange={(e) => editRow(row.id, { selected: e.target.checked })} /></td>
                       <td><button className="file-open" onClick={() => openPreviewFile(row.id)} title="Адкрыць зыходны файл"><span>↗</span><strong>{basename(row.sourcePath)}</strong></button><small>{dirname(row.sourcePath)}</small>{row.summary && <p>{row.summary}</p>}</td>
-                      <td>{mode === "rename" ? <input className={errors[row.id] ? "invalid" : ""} value={row.proposedName} onChange={(e) => editRow(row.id, { proposedName: e.target.value })} /> : <select className={errors[row.id] ? "invalid" : ""} value={row.category} onChange={(e) => editRow(row.id, { category: e.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select>}{errors[row.id] && <span className="row-error">{errors[row.id]}</span>}{row.status === "completed" && <span className="row-success">Гатова</span>}</td>
+                      <td>{mode === "rename" ? <input disabled={Boolean(busy)} className={errors[row.id] ? "invalid" : ""} value={row.proposedName} onChange={(e) => editRow(row.id, { proposedName: e.target.value })} /> : <select disabled={Boolean(busy)} className={errors[row.id] ? "invalid" : ""} value={row.category} onChange={(e) => editRow(row.id, { category: e.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select>}{errors[row.id] && <span className="row-error">{errors[row.id]}</span>}{mode === "organize" && row.targetPath && <small title={row.targetPath}>→ {basename(row.targetPath)}</small>}{row.status === "completed" && <span className="row-success">✓ Гатова</span>}{row.status === "processing" && <span className="row-processing">Выконваецца…</span>}{row.status === "failed" && <span className="row-error">Не выканана</span>}</td>
                       <td><span className="confidence"><i style={{ width: `${Math.round((row.confidence || 0) * 100)}%` }} /></span><small>{Math.round((row.confidence || 0) * 100)}%</small></td>
                     </tr>
                   ))}</tbody>
@@ -590,6 +646,7 @@ function App() {
                 <button className="button danger" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>
               ) : (
                 <div className="preview-actions">
+                  {Object.values(errors).some(Boolean) && <button className="button ghost" disabled={Boolean(busy)} onClick={() => { setRows(current => current.map(row => errors[row.id] ? { ...row, selected: false } : row)); setErrors({}); setMessage("Памылковыя радкі выключаныя; астатні план захаваны"); }}>Выключыць памылковыя</button>}
                   {mode === "rename" && rows.some((row) => row.status === "completed") && <button className="button secondary next-step" disabled={Boolean(busy)} onClick={continueToOrganize}>Далей: сартаваць →</button>}
                   {mode === "organize" && canUploadToDrive && <button className="button secondary" disabled={Boolean(busy)} onClick={uploadToGoogleDrive}>↑ У Google Drive</button>}
                   <button className="button primary" disabled={!planId || !selectedCount || Boolean(busy)} onClick={prepareApply}>{mode === "rename" ? "Перайменаваць" : "Перамясціць"} {selectedCount || ""} файлаў</button>
@@ -601,7 +658,13 @@ function App() {
       </main>
       )}
 
-      {confirming && <div className="modal-backdrop"><div className="modal"><span className="modal-icon">!</span><h3>Пацвердзіць змены?</h3><p>{mode === "rename" ? "Будуць перайменаваны" : "Будуць перамешчаны"} {selectedCount} файлаў. Апошні запуск можна будзе адмяніць.</p><div><button className="button ghost" onClick={() => setConfirming(false)}>Назад</button><button className="button primary" onClick={applyPlan}>Так, выканаць</button></div></div></div>}
+      {busy && progress.total > 0 && <div className="progress-wrap operation-progress" role="status" aria-live="polite">
+        <div><strong>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : busy === "drive" ? "Загрузка ў Google Drive" : mode === "rename" ? "Перайменаванне" : "Перамяшчэнне"}</strong><span className="progress-actions"><strong>{progress.current} / {progress.total} · {Math.round(progress.current / progress.total * 100)}%</strong>{busy === "analysis" && <button className="stop-analysis" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>}</span></div>
+        <progress value={progress.current} max={progress.total} />
+        {(progress.from || progress.filePath) && <p className="progress-file"><strong>{basename(progress.from || progress.filePath)}</strong><span>{progress.from || progress.filePath}</span>{progress.to && <span>→ {progress.to}</span>}{progress.error && <span className="row-error">{progress.error}</span>}</p>}
+      </div>}
+
+      {confirming && <div className="modal-backdrop"><div className="modal"><span className="modal-icon">!</span><h3>Пацвердзіць змены?</h3><p>{mode === "rename" ? "Будуць перайменаваны" : "Будуць перамешчаны"} {selectedCount} файлаў. Апошні запуск можна будзе адмяніць.</p>{mode === "organize" && <p className="destination-confirmation">У падпапкі катэгорый у:<br /><strong>{destination}</strong></p>}<div><button className="button ghost" onClick={() => setConfirming(false)}>Назад</button><button className="button primary" onClick={applyPlan}>Так, выканаць</button></div></div></div>}
     </div>
   );
 }

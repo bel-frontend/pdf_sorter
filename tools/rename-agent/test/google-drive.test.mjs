@@ -53,7 +53,8 @@ test("uploads a sorted file into matching Drive folders", async (t) => {
   assert.equal(result.completed.length, 1);
   assert.equal(result.failures.length, 0);
   assert.equal(result.root.id, "root-id");
-  assert.equal(progress[0].status, "completed");
+  assert.deepEqual(progress.map(event => event.status), ["processing", "completed"]);
+  assert.equal(progress[0].filePath, filePath);
   assert.equal(calls.at(-1).url, "https://upload.test/session");
   assert.equal(calls.at(-1).options.method, "PUT");
 });

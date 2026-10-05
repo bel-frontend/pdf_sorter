@@ -12,7 +12,9 @@ export async function readLastOperation(historyPath) {
 
 export async function writeLastOperation(historyPath, value) {
   await fs.mkdir(path.dirname(historyPath), { recursive: true });
-  await fs.writeFile(historyPath, JSON.stringify(value, null, 2), "utf8");
+  const temporary = `${historyPath}.tmp`;
+  await fs.writeFile(temporary, JSON.stringify(value, null, 2), "utf8");
+  await fs.rename(temporary, historyPath);
 }
 
 export async function undoLastOperation(historyPath, onProgress = () => {}) {
@@ -45,10 +47,13 @@ export async function undoLastOperation(historyPath, onProgress = () => {}) {
   const completed = [];
   const failures = [];
   for (const [index, operation] of reversed.entries()) {
+    await onProgress({ current: index, total: reversed.length,
+      ...operation, status: 'processing' });
     try {
       await moveFile(operation.from, operation.to);
       completed.push(operation);
-      onProgress({ current: index + 1, total: reversed.length });
+      await onProgress({ current: index + 1, total: reversed.length,
+        ...operation, status: 'completed' });
     } catch (error) {
       failures.push({ ...operation, error: String(error?.message || error) });
       break;

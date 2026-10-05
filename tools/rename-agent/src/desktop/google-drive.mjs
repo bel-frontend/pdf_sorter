@@ -140,6 +140,8 @@ export async function uploadSortedOperations({
   const failures = [];
 
   for (const [index, operation] of operations.entries()) {
+    onProgress({ current: index, total: operations.length,
+      id: operation.id, filePath: operation.to, status: 'processing' });
     try {
       const category = path.basename(path.dirname(operation.to)) || "other";
       let folder = folderCache.get(category);
@@ -153,6 +155,7 @@ export async function uploadSortedOperations({
         current: index + 1,
         total: operations.length,
         id: operation.id,
+        filePath: operation.to,
         status: uploaded.skipped ? "skipped" : "completed",
       });
     } catch (error) {
@@ -162,6 +165,7 @@ export async function uploadSortedOperations({
         current: index + 1,
         total: operations.length,
         id: operation.id,
+        filePath: operation.to,
         status: "failed",
         error: failure.error,
       });

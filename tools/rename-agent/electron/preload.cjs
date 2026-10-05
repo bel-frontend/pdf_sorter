@@ -9,6 +9,10 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld("renameDesktop", {
   platform: process.platform,
   getConfig: () => ipcRenderer.invoke("app:get-config"),
+  getWorkspace: () => ipcRenderer.invoke('workspace:get'),
+  saveWorkspace: (snapshot) => ipcRenderer.invoke('workspace:save', snapshot),
+  getReport: () => ipcRenderer.invoke('report:get'),
+  exportReport: (format) => ipcRenderer.invoke('report:export', format),
   saveSettings: (patch) => ipcRenderer.invoke("app:save-settings", patch),
   saveSecrets: (payload) => ipcRenderer.invoke("secrets:save", payload),
   connectGoogleDrive: () => ipcRenderer.invoke("google-drive:connect"),

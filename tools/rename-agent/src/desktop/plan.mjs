@@ -91,7 +91,7 @@ export function buildEffectiveOperations(storedPlan, edits) {
       targetPath = path.join(
         storedPlan.destination,
         category,
-        path.basename(row.sourcePath),
+        path.basename(row.category === category && row.targetPath ? row.targetPath : row.sourcePath),
       );
     }
 
@@ -117,6 +117,20 @@ export function buildEffectiveOperations(storedPlan, edits) {
   }
 
   return { operations, errors };
+}
+
+// Resolve collisions again before applying: files may have appeared since analysis,
+// or a category may have been edited. Never overwrite another document.
+export async function buildPreparedOperations(storedPlan, edits) {
+  const built = buildEffectiveOperations(storedPlan, edits);
+  if (storedPlan.mode !== 'organize') return built;
+  const reserved = new Set();
+  built.errors = built.errors.filter(error => error.message !== 'Такі выніковы шлях ужо выбраны');
+  for (const operation of built.operations) {
+    if (normalizeKey(operation.from) === normalizeKey(operation.to)) continue;
+    operation.to = await reserveUniquePath(operation.to, reserved);
+  }
+  return built;
 }
 
 export async function validateOperations(operations, initialErrors = []) {
@@ -160,14 +174,18 @@ export async function applyOperations(operations, onProgress = () => {}) {
   const completed = [];
   const failures = [];
   for (const [index, operation] of operations.entries()) {
+    await onProgress({ current: index, total: operations.length,
+      ...operation, status: 'processing' });
     try {
       await assertSafeDocument(operation.from);
       const method = await moveFile(operation.from, operation.to);
       if (method !== "skip") completed.push(operation);
-      onProgress({
+      await onProgress({
         current: index + 1,
         total: operations.length,
         id: operation.id,
+        from: operation.from,
+        to: operation.to,
         status: method === "skip" ? "skipped" : "completed",
       });
     } catch (error) {
@@ -176,10 +194,12 @@ export async function applyOperations(operations, onProgress = () => {}) {
         error: String(error?.message || error),
       };
       failures.push(failure);
-      onProgress({
+      await onProgress({
         current: index + 1,
         total: operations.length,
         id: operation.id,
+        from: operation.from,
+        to: operation.to,
         status: "failed",
         error: failure.error,
       });

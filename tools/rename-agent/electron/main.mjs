@@ -21,7 +21,7 @@ import {
 } from "../src/desktop/analysis.mjs";
 import {
   applyOperations,
-  buildEffectiveOperations,
+  buildPreparedOperations,
   sanitizeCategory,
   validateOperations,
 } from "../src/desktop/plan.mjs";
@@ -30,6 +30,8 @@ import {
   undoLastOperation,
   writeLastOperation,
 } from "../src/desktop/history.mjs";
+import { readWorkspace, saveWorkspace } from '../src/desktop/workspace.mjs';
+import { createReport, updateReport, writeReport, readReport, reportFromJournal, reportCsv } from '../src/desktop/report.mjs';
 import {
   ensureDriveFolder,
   uploadSortedOperations,
@@ -106,6 +108,43 @@ function secretsPath() {
 function historyPath() {
   return path.join(app.getPath("userData"), "last-operation.json");
 }
+
+function workspacePath() {
+  return path.join(app.getPath('userData'), 'workspace.json');
+}
+
+function registerWorkspace(snapshot) {
+  if (snapshot?.planId) plans.set(snapshot.planId, {
+    mode: snapshot.mode, destination: snapshot.destination,
+    categories: snapshot.categories, rows: snapshot.rows,
+  });
+  return snapshot;
+}
+
+ipcMain.handle('workspace:get', async () => registerWorkspace(await readWorkspace(workspacePath())));
+ipcMain.handle('workspace:save', async (_event, raw) => {
+  const snapshot = await saveWorkspace(workspacePath(), raw);
+  return registerWorkspace(snapshot);
+});
+
+async function latestReport() {
+  return await readReport(app.getPath('userData')) || reportFromJournal(await readLastOperation(historyPath()));
+}
+
+ipcMain.handle('report:get', latestReport);
+ipcMain.handle('report:export', async (_event, raw) => {
+  const format = z.enum(['csv', 'json']).parse(raw);
+  const report = await latestReport();
+  if (!report) throw new Error('Няма справаздачы для захавання');
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Захаваць справаздачу',
+    defaultPath: `file-garden-${report.id}.${format}`,
+    filters: [{ name: format.toUpperCase(), extensions: [format] }],
+  });
+  if (canceled || !filePath) return null;
+  await fs.writeFile(filePath, format === 'csv' ? reportCsv(report) : JSON.stringify(report, null, 2), { mode: 0o600 });
+  return { filePath };
+});
 
 async function exists(filePath) {
   try {
@@ -630,6 +669,14 @@ ipcMain.handle("analysis:start", async (_event, rawOptions) => {
   activeController?.abort();
   activeController = new AbortController();
   const onProgress = (progress) => sendProgress("analysis:progress", progress);
+  const planId = randomUUID();
+  const onCheckpoint = async ({ rows, failures }) => {
+    await saveWorkspace(workspacePath(), {
+      version: 1, planId, mode: options.mode, files: options.files,
+      destination: options.destination, categories: options.categories,
+      rows, failures,
+    });
+  };
 
   try {
     const result =
@@ -637,18 +684,24 @@ ipcMain.handle("analysis:start", async (_event, rawOptions) => {
         ? await analyzeRename(options.files, options, {
             signal: activeController.signal,
             onProgress,
+            onCheckpoint,
           })
         : await analyzeOrganize(options.files, options, {
             signal: activeController.signal,
             onProgress,
+            onCheckpoint,
           });
-    const planId = randomUUID();
     const categories = normalizeCategories(result.categories || options.categories);
     plans.set(planId, {
       mode: options.mode,
       rows: result.rows,
       destination: options.destination,
       categories,
+    });
+    await saveWorkspace(workspacePath(), {
+      version: 1, planId, mode: options.mode, files: options.files,
+      destination: options.destination, categories,
+      rows: result.rows, failures: result.failures,
     });
     await saveSettings({
       provider: options.provider,
@@ -681,8 +734,9 @@ async function effectivePlan(raw) {
   const payload = editSchema.parse(raw);
   const storedPlan = plans.get(payload.planId);
   if (!storedPlan) throw new Error("План састарэў. Запусці аналіз яшчэ раз.");
-  const built = buildEffectiveOperations(storedPlan, payload.rows);
-  return validateOperations(built.operations, built.errors);
+  const built = await buildPreparedOperations(storedPlan, payload.rows);
+  const validation = await validateOperations(built.operations, built.errors);
+  return validation;
 }
 
 ipcMain.handle("plan:validate", async (_event, raw) => effectivePlan(raw));
@@ -706,26 +760,36 @@ ipcMain.handle("plan:apply", async (_event, raw) => {
   const validation = await effectivePlan(raw);
   if (!validation.valid) return validation;
   const storedPlan = plans.get(raw.planId);
-  const result = await applyOperations(validation.operations, (progress) =>
-    sendProgress("apply:progress", progress),
-  );
-  if (storedPlan && result.completed.length > 0) {
-    const completedById = new Map(
-      result.completed.map((operation) => [operation.id, operation]),
-    );
-    storedPlan.rows = storedPlan.rows.map((row) => {
-      const operation = completedById.get(row.id);
-      return operation ? { ...row, sourcePath: operation.to } : row;
-    });
-  }
-  if (result.completed.length > 0) {
-    await writeLastOperation(historyPath(), {
-      createdAt: new Date().toISOString(),
-      mode: storedPlan?.mode || "rename",
-      operations: result.completed,
-    });
-  }
-  return { valid: true, ...result };
+  const previous = await readLastOperation(historyPath());
+  const journal = previous?.planId === raw.planId ? previous : {
+    planId: raw.planId, createdAt: new Date().toISOString(),
+    mode: storedPlan.mode, operations: [],
+  };
+  const snapshot = await readWorkspace(workspacePath());
+  const report = createReport({ mode: storedPlan.mode, destination: storedPlan.destination,
+    operations: validation.operations });
+  await writeReport(app.getPath('userData'), report);
+  const result = await applyOperations(validation.operations, async (progress) => {
+    sendProgress('apply:progress', progress);
+    if (progress.status === 'completed') {
+      const operation = validation.operations.find(item => item.id === progress.id);
+      journal.operations.push(operation);
+      await writeLastOperation(historyPath(), journal);
+      storedPlan.rows = storedPlan.rows.map(row => row.id === operation.id
+        ? { ...row, sourcePath: operation.to, selected: false, status: 'completed' } : row);
+      if (snapshot?.planId === raw.planId) {
+        snapshot.rows = storedPlan.rows;
+        snapshot.files = snapshot.files.map(file => file === operation.from ? operation.to : file);
+        await saveWorkspace(workspacePath(), snapshot);
+      }
+    }
+    updateReport(report, progress);
+    await writeReport(app.getPath('userData'), report);
+  });
+  report.status = result.failures.length ? 'completed-with-errors' : 'completed';
+  report.finishedAt = new Date().toISOString();
+  await writeReport(app.getPath('userData'), report);
+  return { valid: true, ...result, report };
 });
 
 ipcMain.handle("google-drive:upload-last", async () => {

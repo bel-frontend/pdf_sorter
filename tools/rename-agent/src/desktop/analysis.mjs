@@ -308,6 +308,7 @@ export async function analyzeRename(files, options, hooks = {}) {
         error: String(error?.message || error),
       });
     }
+    await hooks.onCheckpoint?.({ rows, failures });
   }
   hooks.onProgress?.({
     phase: "analysis",
@@ -382,6 +383,7 @@ export async function analyzeOrganize(files, options, hooks = {}) {
         error: String(error?.message || error),
       });
     }
+    await hooks.onCheckpoint?.({ rows, failures });
   }
   hooks.onProgress?.({
     phase: "analysis",
