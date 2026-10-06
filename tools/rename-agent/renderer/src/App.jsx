@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import SettingsPage from "./SettingsPage.jsx";
 import OperationReport from "./OperationReport.jsx";
 
@@ -32,11 +32,20 @@ function App() {
     openai: "",
     google: "",
     openrouter: "",
-    googleDriveClientSecret: "",
   });
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [report, setReport] = useState(null);
   const [reuseAnalysis, setReuseAnalysis] = useState(true);
+  const [workspacePane, setWorkspacePane] = useState('controls');
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportDialog = useRef(null);
+
+  useEffect(() => {
+    const dialog = reportDialog.current;
+    if (!dialog) return;
+    if (reportOpen && !dialog.open) dialog.showModal();
+    else if (!reportOpen && dialog.open) dialog.close();
+  }, [reportOpen]);
 
   useEffect(() => {
     api.getConfig().then(async (data) => {
@@ -182,7 +191,6 @@ function App() {
         openai: "",
         google: "",
         openrouter: "",
-        googleDriveClientSecret: "",
       });
     }
     if (showMessage) setMessage("Налады захаваныя");
@@ -202,11 +210,8 @@ function App() {
       await persistConfiguration(false);
       const result = await api.connectGoogleDrive();
       setConfig((current) => ({ ...current, secretStatus: result.status }));
-      setSettings((current) => ({
-        ...current,
-        googleDriveRootId: result.root.id,
-      }));
-      setMessage(`Google Drive падключаны. Папка: ${result.root.name}`);
+      setSettings(result.settings);
+      setMessage(`Google Drive падключаны: ${result.account?.emailAddress || result.account?.displayName || "Google"}`);
     } catch (error) {
       setMessage(error.message || String(error));
     } finally {
@@ -241,7 +246,7 @@ function App() {
 
   function updateSetting(key, value) {
     setSettings((current) => ({ ...current, [key]: value }));
-    resetPlan();
+    if (!key.startsWith("googleDrive")) resetPlan();
   }
 
   const instructionKey =
@@ -294,6 +299,7 @@ function App() {
       setPage("settings");
       return;
     }
+    setWorkspacePane("preview");
     setBusy("analysis");
     setMessage("");
     setProgress({ current: 0, total: files.length });
@@ -473,9 +479,12 @@ function App() {
     setBusy("drive");
     setProgress({ current: 0, total: selectedCount || 1 });
     try {
+      await persistConfiguration(false);
       const result = await api.uploadLastToGoogleDrive();
+      if (result.canceled) { setMessage("Капіраванне скасавана"); return; }
+      const skipped = result.completed.filter(item => item.driveFile?.skipped).length;
       setMessage(
-        `Google Drive: загружана ${result.completed.length}; памылак ${result.failures.length}`,
+        `Google Drive: скапіравана ${result.completed.length - skipped}; ужо ёсць файлаў з такімі назвамі: ${skipped}; памылак ${result.failures.length}`,
       );
     } catch (error) {
       setMessage(error.message || String(error));
@@ -512,8 +521,8 @@ function App() {
             <button className={page === "workspace" ? "active" : ""} onClick={() => setPage("workspace")}>Файлы</button>
             <button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}>Налады</button>
           </nav>
-          <button className="button ghost" disabled={!canUndo || busy} onClick={undo}>
-            ↶ Адмяніць апошні запуск
+          <button className="button ghost undo-button" title="Адмяніць апошні запуск" aria-label="Адмяніць апошні запуск" disabled={!canUndo || busy} onClick={undo}>
+            ↶ <span>Адмяніць апошні запуск</span>
           </button>
         </div>
       </header>
@@ -531,12 +540,13 @@ function App() {
           clearCredential={clearCredential}
           connectGoogleDrive={connectGoogleDrive}
           disconnectGoogleDrive={disconnectGoogleDrive}
+          cancelGoogleDrive={() => api.cancelGoogleDrive()}
           busy={busy}
           save={persistConfiguration}
           message={message}
         />
       ) : (
-      <main>
+      <main className={`workspace-main pane-${workspacePane}`}>
         <section className="hero-row">
           <div className="mode-switch" role="tablist">
             <button className={mode === "rename" ? "active" : ""} onClick={() => changeMode("rename")}>Перайменаваць</button>
@@ -546,12 +556,16 @@ function App() {
             <span className="eyebrow">{mode === "rename" ? "Разумныя назвы" : "Разумныя катэгорыі"}</span>
             <h2>{mode === "rename" ? "Зразумелыя назвы замест выпадковых кодаў" : "Раскладзі файлы па патрэбных папках"}</h2>
           </div>
+          <button className="button secondary report-open" disabled={!report || Boolean(busy)} onClick={() => setReportOpen(true)}>Справаздача</button>
         </section>
-
-        {!busy && <OperationReport report={report} busy={Boolean(busy)} exportReport={exportReport} />}
+        <nav className="workspace-tabs" aria-label="Панэлі працы">
+          <button aria-pressed={workspacePane === 'controls'} onClick={() => setWorkspacePane('controls')}>Параметры · {files.length}</button>
+          <button aria-pressed={workspacePane === 'preview'} onClick={() => setWorkspacePane('preview')}>План · {rows.length}</button>
+        </nav>
 
         <div className="workspace-grid">
           <aside className="control-column">
+            <div className="control-scroll">
             <section className="card">
               <div className="section-heading"><span>01</span><h3>Файлы</h3><em>{files.length}</em></div>
               <div
@@ -575,10 +589,9 @@ function App() {
                     <button onClick={clearFiles}>Ачысціць усе</button>
                   </div>
                   <div className="source-list-items">
-                    {files.slice(0, 6).map((file) => (
+                    {files.map((file) => (
                       <div key={file}><span>◇</span><div><strong>{basename(file)}</strong><small>{dirname(file)}</small></div><button aria-label={`Прыбраць ${basename(file)}`} onClick={() => { setFiles((current) => current.filter((item) => item !== file)); resetPlan(); }}>×</button></div>
                     ))}
-                    {files.length > 6 && <p>і яшчэ {files.length - 6}…</p>}
                   </div>
                 </div>
               )}
@@ -612,12 +625,15 @@ function App() {
               <label>Дадатковая інструкцыя<textarea rows="4" placeholder={mode === "rename" ? "Напрыклад: для рахункаў заўсёды ўказвай кампанію…" : "Напрыклад: усе дакументы ZUS складвай у taxes_and_social…"} value={settings[instructionKey] || ""} onChange={(e) => updateSetting(instructionKey, e.target.value)} /></label>
             </section>
 
+            </div>
+            <div className="control-footer">
             <label className="reuse-analysis"><input type="checkbox" checked={reuseAnalysis} disabled={Boolean(busy)} onChange={event => setReuseAnalysis(event.target.checked)} /> Выкарыстоўваць захаваны аналіз</label>
             <p className="hint">Без паўторнага OCR для нязмененых файлаў. Здымі адзнаку, каб прааналізаваць нанова.</p>
             <button className="button primary analyze" disabled={Boolean(busy) || !files.length} onClick={analyze}>
               {busy === "analysis" ? "Аналізуем…" : "Стварыць план →"}
             </button>
             {busy === "analysis" && <button className="button ghost full" onClick={() => api.cancelAnalysis()}>Спыніць аналіз</button>}
+            </div>
           </aside>
 
           <section className="preview-column card">
@@ -626,6 +642,7 @@ function App() {
               {rows.length > 0 && <span className="selection-count">Выбрана {selectedCount} з {rows.length}</span>}
             </div>
 
+            <div className="preview-body">
             {rows.length === 0 ? (
               <div className="empty-preview"><div>⌁</div><h4>Тут з’явіцца план</h4><p>Дадай файлы, апішы правілы і запусці аналіз. Нічога не зменіцца без твайго пацвярджэння.</p></div>
             ) : (
@@ -644,7 +661,8 @@ function App() {
               </div>
             )}
 
-            {failures.length > 0 && <div className="failure-box"><strong>Не атрымалася прааналізаваць: {failures.length} з {files.length}</strong>{[...new Map(failures.map((failure) => [failure.error, failure])).values()].slice(0, 3).map((failure) => <p key={`${failure.sourcePath}-${failure.error}`}>{basename(failure.sourcePath)} — {failure.error}</p>)}{failures.length > 3 && <small>Памылкі згрупаваныя; праграма знайшла ўсе {files.length} файлаў.</small>}</div>}
+            {failures.length > 0 && <details className="failure-box"><summary><strong>Не атрымалася прааналізаваць: {failures.length} з {files.length}</strong></summary><div>{[...new Map(failures.map((failure) => [failure.error, failure])).values()].slice(0, 3).map((failure) => <p key={`${failure.sourcePath}-${failure.error}`}>{basename(failure.sourcePath)} — {failure.error}</p>)}{failures.length > 3 && <small>Памылкі згрупаваныя; праграма знайшла ўсе {files.length} файлаў.</small>}</div></details>}
+            </div>
             <div className="preview-footer">
               <p>{message || "Змены будуць выкананы толькі пасля пацвярджэння."}</p>
               {busy === "analysis" ? (
@@ -653,7 +671,7 @@ function App() {
                 <div className="preview-actions">
                   {Object.values(errors).some(Boolean) && <button className="button ghost" disabled={Boolean(busy)} onClick={() => { setRows(current => current.map(row => errors[row.id] ? { ...row, selected: false } : row)); setErrors({}); setMessage("Памылковыя радкі выключаныя; астатні план захаваны"); }}>Выключыць памылковыя</button>}
                   {mode === "rename" && rows.some((row) => row.status === "completed") && <button className="button secondary next-step" disabled={Boolean(busy)} onClick={continueToOrganize}>Далей: сартаваць →</button>}
-                  {mode === "organize" && canUploadToDrive && <button className="button secondary" disabled={Boolean(busy)} onClick={uploadToGoogleDrive}>↑ У Google Drive</button>}
+                  {mode === "organize" && canUploadToDrive && <button className="button secondary" disabled={Boolean(busy)} onClick={uploadToGoogleDrive}>↑ Скапіраваць у Google Drive</button>}
                   <button className="button primary" disabled={!planId || !selectedCount || Boolean(busy)} onClick={prepareApply}>{mode === "rename" ? "Перайменаваць" : "Перамясціць"} {selectedCount || ""} файлаў</button>
                 </div>
               )}
@@ -668,6 +686,11 @@ function App() {
         <progress value={progress.current} max={progress.total} />
         {(progress.from || progress.filePath) && <p className="progress-file"><strong>{basename(progress.from || progress.filePath)}</strong><span>{progress.from || progress.filePath}</span>{progress.to && <span>→ {progress.to}</span>}{progress.error && <span className="row-error">{progress.error}</span>}</p>}
       </div>}
+
+      <dialog className="report-dialog" ref={reportDialog} aria-label="Справаздача аперацыі" onCancel={event => { event.preventDefault(); setReportOpen(false); }}>
+        <button className="button ghost report-close" autoFocus onClick={() => setReportOpen(false)}>× Закрыць</button>
+        <OperationReport report={report} busy={Boolean(busy)} exportReport={exportReport} />
+      </dialog>
 
       {confirming && <div className="modal-backdrop"><div className="modal"><span className="modal-icon">!</span><h3>Пацвердзіць змены?</h3><p>{mode === "rename" ? "Будуць перайменаваны" : "Будуць перамешчаны"} {selectedCount} файлаў. Апошні запуск можна будзе адмяніць.</p>{mode === "organize" && <p className="destination-confirmation">У падпапкі катэгорый у:<br /><strong>{destination}</strong></p>}<div><button className="button ghost" onClick={() => setConfirming(false)}>Назад</button><button className="button primary" onClick={applyPlan}>Так, выканаць</button></div></div></div>}
     </div>

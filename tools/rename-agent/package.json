@@ -14,12 +14,13 @@
     "organize": "node src/organize.mjs",
     "organize:smart": "node src/organize.mjs --smart",
     "gui": "npm run gui:build && electron .",
-    "gui:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
-    "gui:build": "vite build",
+    "gui:dev": "node scripts/prepare-google-drive.mjs && concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "gui:build": "node scripts/prepare-google-drive.mjs && vite build",
     "gui:dist:mac": "npm run gui:build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir",
     "gui:dist:linux": "npm run gui:build && electron-builder --linux AppImage --x64",
     "gui:dist:linux:arm64": "npm run gui:build && electron-builder --linux AppImage --arm64",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "drive:check": "node scripts/prepare-google-drive.mjs --require-configured"
   },
   "dependencies": {
     "@langchain/core": "^1.1.29",
@@ -63,11 +64,15 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": ["dir"]
+      "target": [
+        "dir"
+      ]
     },
     "linux": {
       "category": "Utility",
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     }
   }
 }

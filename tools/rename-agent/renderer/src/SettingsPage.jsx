@@ -19,6 +19,7 @@ function SettingsPage({
   clearCredential,
   connectGoogleDrive,
   disconnectGoogleDrive,
+  cancelGoogleDrive,
   busy,
   save,
   message,
@@ -83,26 +84,23 @@ function SettingsPage({
             <span>G</span>
             <div>
               <h3>Google Drive</h3>
-              <p>Загрузка вынікаў сартавання ў папкі з тымі ж катэгорыямі.</p>
+              <p>Капіраванне вынікаў сартавання ў папкі з тымі ж катэгорыямі.</p>
             </div>
             <i className={config.secretStatus.googleDriveConnected ? "status-ready" : "status-missing"}>
               {config.secretStatus.googleDriveConnected ? "падключаны" : "не падключаны"}
             </i>
           </div>
-          <div className="settings-fields three-columns drive-fields">
-            <label>OAuth Client ID<input value={settings.googleDriveClientId || ""} onChange={(event) => updateSetting("googleDriveClientId", event.target.value)} placeholder="…apps.googleusercontent.com" /></label>
-            <label>OAuth Client Secret<input type="password" autoComplete="off" value={credentials.googleDriveClientSecret || ""} onChange={(event) => setCredentials((current) => ({ ...current, googleDriveClientSecret: event.target.value }))} placeholder={config.secretStatus.googleDriveClientSecret ? "Захаваны; увядзі для замены" : "Неабавязковы для Desktop app"} /></label>
-            <label>Каранёвая папка<input value={settings.googleDriveRootName || "File Garden"} onChange={(event) => updateSetting("googleDriveRootName", event.target.value)} /></label>
+          {config.secretStatus.googleDriveConnected && <p className="settings-note">Акаўнт: {settings.googleDriveAccount?.emailAddress || settings.googleDriveAccount?.displayName || "Google"}</p>}
+          <div className="settings-fields drive-fields">
+            <label>Папка для копій у «Мой дыск»<input value={settings.googleDriveRootName ?? "File Garden"} onChange={(event) => updateSetting("googleDriveRootName", event.target.value)} /></label>
           </div>
           <div className="drive-actions">
-            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">Стварыць Desktop OAuth client ↗</a>
-            {config.secretStatus.googleDriveConnected ? (
-              <button className="button ghost" disabled={Boolean(busy)} onClick={disconnectGoogleDrive}>Адключыць Google Drive</button>
-            ) : (
-              <button className="button secondary" disabled={Boolean(busy) || !settings.googleDriveClientId?.trim()} onClick={connectGoogleDrive}>{busy === "google-connect" ? "Чакаем Google…" : "Падключыць Google Drive"}</button>
-            )}
+            {busy === "google-connect" ? <button className="button ghost" onClick={cancelGoogleDrive}>Скасаваць уваход</button> : <>
+              <button className="button secondary" disabled={Boolean(busy) || !config.googleDrive?.available} onClick={connectGoogleDrive}>{config.secretStatus.googleDriveConnected ? "Змяніць акаўнт" : "Падключыць Google Drive"}</button>
+              {config.secretStatus.googleDriveConnected && <button className="button ghost" disabled={Boolean(busy)} onClick={disconnectGoogleDrive}>Адключыць</button>}
+            </>}
           </div>
-          <p className="settings-note">У Google Cloud уключы Drive API і ствары OAuth client тыпу Desktop app. Доступ абмежаваны файламі, створанымі File Garden.</p>
+          <p className="settings-note">{config.googleDrive?.available ? "Выберы свой акаўнт у браўзеры і дазволь File Garden капіраваць вынікі. Лакальныя файлы застануцца на месцы." : "У гэтай зборцы падключэнне Google Drive яшчэ недаступнае. Яго павінен падрыхтаваць распрацоўшчык File Garden."}</p>
         </section>
 
         <section className="settings-card">

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("renameDesktop", {
   saveSettings: (patch) => ipcRenderer.invoke("app:save-settings", patch),
   saveSecrets: (payload) => ipcRenderer.invoke("secrets:save", payload),
   connectGoogleDrive: () => ipcRenderer.invoke("google-drive:connect"),
+  cancelGoogleDrive: () => ipcRenderer.invoke("google-drive:cancel"),
   disconnectGoogleDrive: () => ipcRenderer.invoke("google-drive:disconnect"),
   uploadLastToGoogleDrive: () => ipcRenderer.invoke("google-drive:upload-last"),
   pickFiles: () => ipcRenderer.invoke("dialog:pick-files"),

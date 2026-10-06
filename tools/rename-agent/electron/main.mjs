@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
-import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   app,
   BrowserWindow,
@@ -34,9 +33,13 @@ import { readWorkspace, saveWorkspace } from '../src/desktop/workspace.mjs';
 import { createReport, updateReport, writeReport, readReport, reportFromJournal, reportCsv } from '../src/desktop/report.mjs';
 import { createAnalysisCache } from '../src/desktop/analysis-cache.mjs';
 import {
-  ensureDriveFolder,
   uploadSortedOperations,
 } from "../src/desktop/google-drive.mjs";
+
+import { authorizeDrive, exchangeGoogleToken, parseDriveClient } from '../src/desktop/google-drive-auth.mjs';
+let driveClient = null;
+try { driveClient = parseDriveClient(JSON.parse(await fs.readFile(new URL('./google-drive-client.json', import.meta.url), 'utf8'))); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+let driveAuthController = null;
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CATEGORIES = [
@@ -216,7 +219,7 @@ async function readSettings() {
     organizeInstructions:
       stored.organizeInstructions || stored.instructions || "",
     lastDestination: stored.lastDestination || "",
-    googleDriveClientId: stored.googleDriveClientId || "",
+    googleDriveAccount: stored.googleDriveAccount || null,
     googleDriveRootName: stored.googleDriveRootName || "File Garden",
     googleDriveRootId: stored.googleDriveRootId || "",
   };
@@ -273,8 +276,7 @@ function secretStatus(secrets) {
       google: Boolean(secrets.google),
       openrouter: Boolean(secrets.openrouter),
     },
-    googleDriveClientSecret: Boolean(secrets.googleDriveClientSecret),
-    googleDriveConnected: Boolean(secrets.googleDriveRefreshToken),
+    googleDriveConnected: Boolean(driveClient && secrets.googleDriveRefreshToken && secrets.googleDriveOAuthClientId === driveClient.clientId),
   };
 }
 
@@ -313,8 +315,8 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
-    minWidth: 980,
-    minHeight: 680,
+    minWidth: 600,
+    minHeight: 480,
     backgroundColor: "#f4f1ea",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     ...(process.platform === "darwin"
@@ -387,142 +389,27 @@ async function ensureProviderReady(options) {
   }
 }
 
-function base64Url(buffer) {
-  return buffer
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-async function exchangeGoogleToken(parameters) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(parameters),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      `Google OAuth: ${data.error_description || data.error || `HTTP ${response.status}`}`,
-    );
-  }
-  return data;
-}
-
 async function getGoogleDriveAccessToken() {
-  const settings = await readSettings();
   const secrets = await readSecrets();
-  if (!settings.googleDriveClientId || !secrets.googleDriveRefreshToken) {
-    throw new Error("Спачатку падключы Google Drive у «Наладах»");
-  }
-  const token = await exchangeGoogleToken({
-    client_id: settings.googleDriveClientId,
-    ...(secrets.googleDriveClientSecret
-      ? { client_secret: secrets.googleDriveClientSecret }
-      : {}),
-    refresh_token: secrets.googleDriveRefreshToken,
-    grant_type: "refresh_token",
-  });
+  if (!secretStatus(secrets).googleDriveConnected) throw new Error('Спачатку падключы Google Drive у «Наладах»');
+  const token = await exchangeGoogleToken(driveClient, { refresh_token: secrets.googleDriveRefreshToken, grant_type: 'refresh_token' });
   return token.access_token;
 }
 
 async function authorizeGoogleDrive() {
-  const settings = await readSettings();
-  const secrets = await readSecrets();
-  if (!settings.googleDriveClientId) {
-    throw new Error("Увядзі Google OAuth Client ID і захавай налады");
-  }
-
-  const verifier = base64Url(randomBytes(48));
-  const challenge = base64Url(createHash("sha256").update(verifier).digest());
-  const state = base64Url(randomBytes(24));
-  let timeout;
-  let settled = false;
-
-  const authorization = await new Promise((resolve, reject) => {
-    const server = createServer((request, response) => {
-      try {
-        const url = new URL(request.url || "/", "http://127.0.0.1");
-        if (url.pathname !== "/oauth2callback") {
-          response.writeHead(404).end();
-          return;
-        }
-        if (url.searchParams.get("state") !== state) {
-          throw new Error("Google OAuth вярнуў няправільны state");
-        }
-        const oauthError = url.searchParams.get("error");
-        if (oauthError) throw new Error(`Google OAuth: ${oauthError}`);
-        const code = url.searchParams.get("code");
-        if (!code) throw new Error("Google OAuth не вярнуў код аўтарызацыі");
-        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        response.end("<h2>Google Drive падключаны</h2><p>Можна закрыць гэту старонку і вярнуцца ў File Garden.</p>");
-        settled = true;
-        clearTimeout(timeout);
-        server.close();
-        resolve({ code, redirectUri });
-      } catch (error) {
-        response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-        response.end(String(error?.message || error));
-        settled = true;
-        clearTimeout(timeout);
-        server.close();
-        reject(error);
-      }
-    });
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", async () => {
-      const address = server.address();
-      redirectUri = `http://127.0.0.1:${address.port}/oauth2callback`;
-      const params = new URLSearchParams({
-        client_id: settings.googleDriveClientId,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: "https://www.googleapis.com/auth/drive.file",
-        access_type: "offline",
-        prompt: "consent",
-        code_challenge: challenge,
-        code_challenge_method: "S256",
-        state,
-      });
-      try {
-        await shell.openExternal(
-          `https://accounts.google.com/o/oauth2/v2/auth?${params}`,
-        );
-      } catch (error) {
-        server.close();
-        reject(error);
-      }
-    });
-    let redirectUri = "";
-    timeout = setTimeout(() => {
-      if (settled) return;
-      server.close();
-      reject(new Error("Час чакання аўтарызацыі Google скончыўся"));
-    }, 180000);
-  });
-
-  const token = await exchangeGoogleToken({
-    client_id: settings.googleDriveClientId,
-    ...(secrets.googleDriveClientSecret
-      ? { client_secret: secrets.googleDriveClientSecret }
-      : {}),
-    code: authorization.code,
-    code_verifier: verifier,
-    grant_type: "authorization_code",
-    redirect_uri: authorization.redirectUri,
-  });
-  if (!token.refresh_token) {
-    throw new Error("Google не вярнуў refresh token. Адкліч доступ і падключыся нанова.");
-  }
-  await saveSecrets({ values: { googleDriveRefreshToken: token.refresh_token } });
-  const root = await ensureDriveFolder(
-    token.access_token,
-    settings.googleDriveRootName || "File Garden",
-  );
-  await saveSettings({ googleDriveRootId: root.id });
-  return { root, status: secretStatus(await readSecrets()) };
+  if (driveAuthController) throw new Error('Уваход у Google ужо адкрыты');
+  const controller = new AbortController();
+  driveAuthController = controller;
+  try {
+    const token = await authorizeDrive(driveClient, { openExternal: url => shell.openExternal(url), signal: controller.signal });
+    const response = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)', { headers: { Authorization: `Bearer ${token.access_token}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
+    if (!response.ok) throw new Error(`Google Drive: HTTP ${response.status}`);
+    const { user: account } = await response.json();
+    controller.signal.throwIfAborted();
+    await saveSecrets({ values: { googleDriveRefreshToken: token.refresh_token, googleDriveOAuthClientId: driveClient.clientId } });
+    const settings = await saveSettings({ googleDriveRootId: '', googleDriveAccount: account });
+    return { account, settings, status: secretStatus(await readSecrets()) };
+  } finally { driveAuthController = null; }
 }
 
 ipcMain.handle("app:get-config", async () => {
@@ -531,6 +418,7 @@ ipcMain.handle("app:get-config", async () => {
   return {
     settings,
     modelOptions: ProviderModels,
+    googleDrive: { available: Boolean(driveClient) },
     secretStatus: secretStatus(secrets),
     canUndo: Boolean((await readLastOperation(historyPath()))?.operations?.length),
     canUploadToDrive: Boolean(
@@ -557,7 +445,6 @@ ipcMain.handle("app:save-settings", async (_event, patch) => {
       renameInstructions: z.string().optional(),
       organizeInstructions: z.string().optional(),
       lastDestination: z.string().optional(),
-      googleDriveClientId: z.string().optional(),
       googleDriveRootName: z.string().min(1).max(120).optional(),
       googleDriveRootId: z.string().optional(),
     })
@@ -573,11 +460,10 @@ ipcMain.handle("secrets:save", async (_event, payload) => {
           openai: z.string().optional(),
           google: z.string().optional(),
           openrouter: z.string().optional(),
-          googleDriveClientSecret: z.string().optional(),
         })
         .default({}),
       clear: z
-        .array(z.enum(["openai", "google", "openrouter", "googleDriveClientSecret"]))
+        .array(z.enum(["openai", "google", "openrouter"]))
         .default([]),
     })
     .parse(payload);
@@ -588,7 +474,10 @@ ipcMain.handle("secrets:save", async (_event, payload) => {
 
 ipcMain.handle("google-drive:connect", async () => authorizeGoogleDrive());
 
+ipcMain.handle("google-drive:cancel", () => { driveAuthController?.abort(); });
+
 ipcMain.handle("google-drive:disconnect", async () => {
+  driveAuthController?.abort();
   const secrets = await readSecrets();
   if (secrets.googleDriveRefreshToken) {
     try {
@@ -602,8 +491,8 @@ ipcMain.handle("google-drive:disconnect", async () => {
       // Local disconnect must still work if Google is temporarily unavailable.
     }
   }
-  await saveSecrets({ clear: ["googleDriveRefreshToken"] });
-  const settings = await saveSettings({ googleDriveRootId: "" });
+  await saveSecrets({ clear: ["googleDriveRefreshToken", "googleDriveOAuthClientId"] });
+  const settings = await saveSettings({ googleDriveRootId: "", googleDriveAccount: null });
   return { settings, status: secretStatus(await readSecrets()) };
 });
 
@@ -804,6 +693,15 @@ ipcMain.handle("google-drive:upload-last", async () => {
     throw new Error("Няма вынікаў апошняй сартыроўкі для загрузкі");
   }
   const settings = await readSettings();
+  if (!secretStatus(await readSecrets()).googleDriveConnected) throw new Error('Спачатку падключы Google Drive');
+  const confirmation = await dialog.showMessageBox(mainWindow, {
+    type: 'question', title: 'Капіраванне ў Google Drive',
+    message: `Скапіраваць ${journal.operations.length} файлаў апошняй сартыроўкі?`,
+    detail: `Акаўнт: ${settings.googleDriveAccount?.emailAddress || 'Google'}\nПапка: Мой дыск / ${settings.googleDriveRootName}\nЛакальныя файлы застануцца на месцы. Файлы з аднолькавымі назвамі ў Drive будуць прапушчаныя.`,
+    buttons: ['Скапіраваць', 'Скасаваць'], defaultId: 0, cancelId: 1,
+  });
+  if (confirmation.response !== 0) return { canceled: true };
+
   const result = await uploadSortedOperations({
     operations: journal.operations,
     rootName: settings.googleDriveRootName || "File Garden",
