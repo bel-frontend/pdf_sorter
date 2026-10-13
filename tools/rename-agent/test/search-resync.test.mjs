@@ -351,3 +351,21 @@ test("foreground file operations preempt resync and its retry preserves a rename
     await service.close();
   }
 });
+
+test("quick resync trusts unchanged size and mtime but rehashes modified files", async (t) => {
+  const f = await fixture(t);
+  const same = await seed(f, "same.pdf", "unchanged invoice"),
+    edited = await seed(f, "edited.pdf", "original text");
+  await fs.writeFile(edited.file, "%PDF-1.4\nreplaced text, longer");
+  const hashed = [];
+  const result = await resyncCatalog(f.catalog, {
+    quick: true,
+    fingerprint: async (file, signal) => {
+      hashed.push(file);
+      return contentFingerprint(file, signal);
+    },
+  });
+  assert.deepEqual(hashed, [edited.file]);
+  assert.equal(result.changed, 1);
+  assert.equal(f.catalog.locate(same.file).hash, same.hash);
+});

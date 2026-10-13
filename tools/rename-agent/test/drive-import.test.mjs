@@ -104,3 +104,22 @@ test('completed copies can be recovered after restart and are scoped to their ac
   await fs.rename(result.files[0].localPath, result.files[0].localPath + '.moved');
   assert.equal((await readDriveImports(directory, 'owner@example.com')).length, 0);
 });
+
+test('slow but active downloads continue, stalled downloads fail with the idle timeout', async t => {
+  const directory = await temporary(t);
+  // Like fetch, an aborted request errors its response body.
+  const body = (delays, signal) => new ReadableStream({ async start(controller) {
+    signal.addEventListener('abort', () => controller.error(signal.reason));
+    for (const [index, delay] of delays.entries()) { await new Promise(resolve => setTimeout(resolve, delay)); if (signal.aborted) return; controller.enqueue(new TextEncoder().encode(index ? 'x' : '%PDF-1.4\n')); }
+    controller.close();
+  } });
+  const download = delays => downloadDriveFiles({ ids: ['slow'], token: 'token', cacheRoot: directory, timeoutMs: 80, fetchImpl: async (url, options) => {
+    if (!url.includes('alt=media')) return Response.json(metadata('slow', { size: undefined, md5Checksum: undefined }));
+    return new Response(body(delays, options.signal));
+  } });
+  const slow = await download([30, 30, 30, 30, 30, 30]);
+  assert.equal(slow.files.length, 1);
+  const stalled = await download([10, 300]);
+  assert.equal(stalled.files.length, 0);
+  assert.match(stalled.failures[0].error, /не адказвае/);
+});

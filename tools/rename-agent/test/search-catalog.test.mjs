@@ -325,3 +325,30 @@ test("coarse dates match overlapping ranges and source filters return the matchi
     c.close();
   }
 });
+
+test("moving onto a stale catalog path replaces it and semantic limit counts documents", () => {
+  const c = new Catalog(":memory:");
+  try {
+    document(c, "a", "/files/a.pdf", "Payroll agreement ".repeat(400));
+    document(c, "b", "/files/report.pdf", "Old report");
+    document(c, "c", "/files/c.pdf", "Hospital invoice");
+    c.move("/files/a.pdf", "/files/report.pdf");
+    assert.equal(c.locate("/files/report.pdf").hash, "a");
+    assert.equal(c.locate("/files/a.pdf"), undefined);
+    assert.equal(c.search({ mode: "exact", query: "report" })[0].id, "a");
+    for (const hash of ["a", "c"]) {
+      const chunks = c.pendingVectors(hash, "p");
+      c.putVectors(
+        "p",
+        chunks,
+        chunks.map(() => vector(0)),
+      );
+    }
+    assert.ok(c.pendingVectors("a", "p").length === 0);
+    const hits = c.search({ query: "x", vector: vector(0), profile: "p", limit: 2 });
+    assert.deepEqual(hits.map((hit) => hit.id).sort(), ["a", "c"]);
+    assert.ok(hits.every((hit) => hit.matches.length <= 3));
+  } finally {
+    c.close();
+  }
+});
