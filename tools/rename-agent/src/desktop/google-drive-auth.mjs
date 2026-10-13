@@ -22,7 +22,7 @@ export async function exchangeGoogleToken(client, parameters, { fetchImpl = fetc
   return data;
 }
 
-export async function authorizeDrive(client, { openExternal, signal, fetchImpl = fetch, timeoutMs = 180000 }) {
+export async function authorizeDrive(client, { openExternal, signal, fetchImpl = fetch, timeoutMs = 180000, scopes = ['https://www.googleapis.com/auth/drive.file'] }) {
   if (!client?.clientId) throw new Error('Гэта зборка яшчэ не мае падключэння Google Drive. Патрэбна абнаўленне File Garden.');
   signal?.throwIfAborted();
   const verifier = randomBytes(48).toString('base64url');
@@ -51,7 +51,7 @@ export async function authorizeDrive(client, { openExternal, signal, fetchImpl =
     server.listen(0, '127.0.0.1', () => {
       if (settled) { server.close(); return; }
       redirectUri = `http://127.0.0.1:${server.address().port}/oauth2callback`;
-      const params = new URLSearchParams({ client_id: client.clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'https://www.googleapis.com/auth/drive.file', access_type: 'offline', prompt: 'select_account consent', code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state });
+      const params = new URLSearchParams({ client_id: client.clientId, redirect_uri: redirectUri, response_type: 'code', scope: scopes.join(' '), access_type: 'offline', prompt: 'select_account consent', code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state });
       Promise.resolve().then(() => openExternal(`https://accounts.google.com/o/oauth2/v2/auth?${params}`)).catch(error => finish(error));
     });
     timer = setTimeout(() => finish(new Error('Час чакання ўваходу ў Google скончыўся')), timeoutMs);

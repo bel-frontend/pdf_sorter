@@ -15,6 +15,7 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".gif": "image/gif",
+  ".bmp": "image/bmp",
   ".tif": "image/tiff",
   ".tiff": "image/tiff",
   ".doc": "application/msword",
@@ -132,6 +133,7 @@ export async function uploadSortedOperations({
   rootName,
   getAccessToken,
   onProgress = () => {},
+  categorize = true,
 }) {
   const accessToken = await getAccessToken();
   const root = await ensureDriveFolder(accessToken, rootName || "File Garden");
@@ -144,7 +146,7 @@ export async function uploadSortedOperations({
       id: operation.id, filePath: operation.to, status: 'processing' });
     try {
       const category = path.basename(path.dirname(operation.to)) || "other";
-      let folder = folderCache.get(category);
+      let folder = categorize ? folderCache.get(category) : root;
       if (!folder) {
         folder = await ensureDriveFolder(accessToken, category, root.id);
         folderCache.set(category, folder);

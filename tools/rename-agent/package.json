@@ -19,27 +19,28 @@
     "gui:dist:mac": "npm run gui:build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir",
     "gui:dist:linux": "npm run gui:build && electron-builder --linux AppImage --x64",
     "gui:dist:linux:arm64": "npm run gui:build && electron-builder --linux AppImage --arm64",
-    "test": "node --test test/*.test.mjs",
+    "test": "cross-env ELECTRON_RUN_AS_NODE=1 electron --test test/*.test.mjs",
     "drive:check": "node scripts/prepare-google-drive.mjs --require-configured"
   },
   "dependencies": {
     "@langchain/core": "^1.1.29",
     "@langchain/google-genai": "^2.1.22",
-    "@langchain/openai": "^1.2.11",
     "@langchain/ollama": "^1.2.5",
+    "@langchain/openai": "^1.2.11",
     "dotenv": "^17.3.1",
     "fast-glob": "^3.3.3",
     "mammoth": "^1.11.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "sqlite-vec": "0.1.9",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.3",
     "concurrently": "^9.2.1",
     "cross-env": "^10.0.0",
     "electron": "^38.1.2",
     "electron-builder": "^26.0.12",
-    "@vitejs/plugin-react": "^5.0.3",
     "vite": "^7.1.7",
     "wait-on": "^8.0.4"
   },
@@ -60,6 +61,10 @@
       {
         "from": "../read_document.py",
         "to": "read_document.py"
+      },
+      {
+        "from": ".vector-runtime",
+        "to": "vector-runtime"
       }
     ],
     "mac": {
@@ -73,6 +78,10 @@
       "target": [
         "AppImage"
       ]
-    }
+    },
+    "asarUnpack": [
+      "node_modules/sqlite-vec*/**/*"
+    ],
+    "beforePack": "scripts/prepare-vector.cjs"
   }
 }

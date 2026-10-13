@@ -28,7 +28,7 @@ export function renameContext(options) {
   return createHash('sha256').update(JSON.stringify({ language: options.language || 'en', instructions: (options.instructions || '').trim() })).digest('hex');
 }
 
-export function createAnalysisCache(directory) {
+export function createAnalysisCache(directory, { onWrite } = {}) {
   let pending = Promise.resolve();
   return {
     async get(filePath, signal) {
@@ -53,6 +53,7 @@ export function createAnalysisCache(directory) {
       });
       pending = write;
       await write;
+      await onWrite?.(filePath, fingerprint, metadata);
       return metadata;
     },
   };

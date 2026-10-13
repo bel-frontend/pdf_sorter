@@ -1,4 +1,5 @@
 import React from "react";
+import SearchSettings from "./SearchSettings.jsx";
 
 const PROVIDER_LABELS = {
   openai: "OpenAI",
@@ -42,6 +43,8 @@ function SettingsPage({
       </div>
 
       <div className="settings-grid">
+        <SearchSettings settings={settings} updateSetting={updateSetting} save={save} busy={busy} />
+
         <section className="settings-card settings-card-wide">
           <div className="settings-card-heading">
             <span>AI</span>

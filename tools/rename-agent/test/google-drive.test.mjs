@@ -119,3 +119,23 @@ test('a failed Drive upload is reported while the next file is copied successful
   assert.equal(replies.length, 0);
   for (const file of files) assert.equal(await fs.readFile(file, 'utf8'), '%PDF-1.4\npayload');
 });
+
+test('direct local-file upload uses configured root without creating a local directory category', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'fg-flat-upload-')); t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const filePath = path.join(directory, 'local.pdf'); await fs.writeFile(filePath, '%PDF-1.4\nlocal');
+  const original = globalThis.fetch; t.after(() => { globalThis.fetch = original; });
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes('/files?') && !options.method) return Response.json({ files: calls.length === 1 ? [{ id: 'root', name: 'File Garden' }] : [] });
+    if (options.method === 'POST') return new Response(null, { headers: { location: 'https://upload.test/file' } });
+    if (options.method === 'PUT') { for await (const chunk of options.body) {} return Response.json({ id: 'new', name: 'local.pdf' }); }
+    assert.fail('unexpected request');
+  };
+  const result = await uploadSortedOperations({ operations: [{ id: 'local', to: filePath }], rootName: 'File Garden', categorize: false, getAccessToken: async () => 'token' });
+  assert.equal(result.completed.length, 1);
+  const creation = calls.find(call => call.options.method === 'POST');
+  assert.deepEqual(JSON.parse(creation.options.body).parents, ['root']);
+  assert.equal(calls.length, 4);
+  assert.equal(await fs.readFile(filePath, 'utf8'), '%PDF-1.4\nlocal');
+});

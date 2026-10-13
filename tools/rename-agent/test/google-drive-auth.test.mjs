@@ -57,3 +57,12 @@ test('unconfigured app opens no browser; refresh errors require reconnection', a
   await assert.rejects(authorizeDrive(null, { openExternal: () => assert.fail('opened browser') }), /зборка/);
   await assert.rejects(exchangeGoogleToken(client, { refresh_token: 'expired', grant_type: 'refresh_token' }, { fetchImpl: async () => Response.json({ error: 'invalid_grant' }, { status: 400 }) }), /invalid_grant/);
 });
+
+test('Drive browser permission upgrade requests reading together with existing app-file scope', async () => {
+  const scopes = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.readonly'];
+  const token = await authorizeDrive(client, { scopes, openExternal: async address => {
+    const auth = new URL(address); assert.deepEqual(auth.searchParams.get('scope').split(' '), scopes);
+    const callback = new URL(auth.searchParams.get('redirect_uri')); callback.searchParams.set('state', auth.searchParams.get('state')); callback.searchParams.set('code', 'upgrade'); await fetch(callback);
+  }, fetchImpl: async () => Response.json({ access_token: 'access', refresh_token: 'refresh', scope: scopes.join(' ') }) });
+  assert.equal(token.scope, scopes.join(' '));
+});

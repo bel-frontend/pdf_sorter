@@ -25,6 +25,8 @@ OCR engine: EasyOCR (pure pip, no system dependencies).
 """
 
 import argparse
+import json
+import re
 import importlib.util
 import os
 import sys
@@ -392,6 +394,50 @@ def process_file(
             return f"ПАМЫЛКА: Не атрымалася прачытаць файл: {file_path}"
 
 
+def stream_document(file_path, langs, smart=False, skip_pages=None):
+    """Emit complete per-page records without changing the legacy CLI output."""
+    def emit(value):
+        print(json.dumps(value, ensure_ascii=False), flush=True)
+    skip = set(skip_pages or [])
+    if Path(file_path).suffix.lower() != ".pdf":
+        emit({"type": "info", "total": 1})
+        if 0 not in skip:
+            try:
+                text = ocr_image(file_path, langs)
+                emit({"type": "page", "number": 1, "total": 1, "text": text, "method": "ocr", "error": ""})
+            except Exception as error:
+                emit({"type": "page", "number": 1, "total": 1, "text": "", "method": "ocr", "error": str(error)})
+        return
+    import fitz
+    with fitz.open(file_path) as document:
+        total = len(document)
+        emit({"type": "info", "total": total})
+        targets = (_smart_page_selection(total) or list(range(total))) if smart else list(range(total))
+        for index in targets:
+            if index in skip:
+                continue
+            text, method, error = "", "text", ""
+            try:
+                page = document[index]
+                text = page.get_text().strip()
+                if not text and not page.get_images() and not page.get_drawings():
+                    method = "blank"
+                elif not text or text.count("\ufffd") > len(text) * .2 or text.count("\x00") > len(text) * .1 or (page.get_images() and len(re.findall(r"[^\W\d_]{3,}", text, re.UNICODE)) < 3):
+                    method = "ocr"
+                    image = _render_pdf_page_to_png(document, index)
+                    if image is None:
+                        raise RuntimeError("Не ўдалося адрэндэрыць старонку")
+                    lines = []
+                    for group in _split_lang_groups(langs):
+                        lines.extend(item[1] for item in _get_ocr_reader(group).readtext(image))
+                    text = "\n".join(lines).strip()
+                    if not text:
+                        raise RuntimeError("Тэкст не распазнаны")
+            except Exception as failure:
+                error = str(failure)
+            emit({"type": "page", "number": index + 1, "total": total, "text": text, "method": method, "error": error})
+
+
 def main():
     # Fix for Windows console encoding issues (UnicodeEncodeError)
     if hasattr(sys.stdout, "reconfigure"):
@@ -433,7 +479,12 @@ def main():
         help="Аўтаматычна выбіраць старонкі для доўгіх PDF",
     )
 
+    parser.add_argument("--json-lines", action="store_true", help="Structured page records for the desktop catalog")
+    parser.add_argument("--skip-pages", default="", help="Already cached 1-based pages")
     args = parser.parse_args()
+    if args.json_lines:
+        stream_document(args.file, _parse_langs(args.lang), args.smart_pages, parse_pages(args.skip_pages) if args.skip_pages else [])
+        return
 
     pages = parse_pages(args.pages) if args.pages else None
     langs = _parse_langs(args.lang)

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import SearchPage from './SearchPage.jsx';
+import DrivePage from './DrivePage.jsx';
 import SettingsPage from "./SettingsPage.jsx";
 import OperationReport from "./OperationReport.jsx";
 
@@ -203,12 +205,12 @@ function App() {
     setMessage("Ключ выдалены з бяспечнага сховішча");
   }
 
-  async function connectGoogleDrive() {
+  async function connectGoogleDrive(options = {}) {
     setBusy("google-connect");
     setMessage("Адкрываем аўтарызацыю Google у браўзеры…");
     try {
       await persistConfiguration(false);
-      const result = await api.connectGoogleDrive();
+      const result = await api.connectGoogleDrive({ browse: options.browse === true });
       setConfig((current) => ({ ...current, secretStatus: result.status }));
       setSettings(result.settings);
       setMessage(`Google Drive падключаны: ${result.account?.emailAddress || result.account?.displayName || "Google"}`);
@@ -246,7 +248,7 @@ function App() {
 
   function updateSetting(key, value) {
     setSettings((current) => ({ ...current, [key]: value }));
-    if (!key.startsWith("googleDrive")) resetPlan();
+    if (!key.startsWith("googleDrive") && !key.startsWith("search")) resetPlan();
   }
 
   const instructionKey =
@@ -519,6 +521,8 @@ function App() {
           <span className="provider-summary">{settings.provider} · {settings.model}</span>
           <nav className="app-nav">
             <button className={page === "workspace" ? "active" : ""} onClick={() => setPage("workspace")}>Файлы</button>
+            <button className={page === "search" ? "active" : ""} disabled={Boolean(busy)} onClick={() => setPage("search")}>Пошук</button>
+            <button className={page === "drive" ? "active" : ""} disabled={Boolean(busy)} onClick={() => setPage("drive")}>Google Drive</button>
             <button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}>Налады</button>
           </nav>
           <button className="button ghost undo-button" title="Адмяніць апошні запуск" aria-label="Адмяніць апошні запуск" disabled={!canUndo || busy} onClick={undo}>
@@ -527,6 +531,12 @@ function App() {
         </div>
       </header>
 
+      <SearchPage active={page === 'search'} busy={busy} categories={categories} openSettings={() => setPage('settings')}
+        importFiles={paths => { setFiles(current => [...new Set([...current, ...paths])]); setPage('workspace'); setMessage('Файл з каталога дададзены. Існуючы план захаваны.'); }} />
+      <DrivePage active={page === 'drive'} config={config} settings={settings} busy={busy} message={message}
+        connect={connectGoogleDrive} setBusy={setBusy} setMessage={setMessage} setProgress={setProgress}
+        canUploadResults={canUploadToDrive} uploadResults={uploadToGoogleDrive} saveConfiguration={() => persistConfiguration(false)}
+        importFiles={paths => { setFiles(current => [...new Set([...current, ...paths])]); setPage('workspace'); }} />
       {page === "settings" ? (
         <SettingsPage
           config={config}
@@ -545,7 +555,7 @@ function App() {
           save={persistConfiguration}
           message={message}
         />
-      ) : (
+      ) : page === "workspace" ? (
       <main className={`workspace-main pane-${workspacePane}`}>
         <section className="hero-row">
           <div className="mode-switch" role="tablist">
@@ -679,10 +689,10 @@ function App() {
           </section>
         </div>
       </main>
-      )}
+      ) : null}
 
       {busy && progress.total > 0 && <div className="progress-wrap operation-progress" role="status" aria-live="polite">
-        <div><strong>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : busy === "drive" ? "Загрузка ў Google Drive" : mode === "rename" ? "Перайменаванне" : "Перамяшчэнне"}</strong><span className="progress-actions"><strong>{progress.current} / {progress.total} · {Math.round(progress.current / progress.total * 100)}%</strong>{busy === "analysis" && <button className="stop-analysis" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>}</span></div>
+        <div><strong>{busy === "analysis" ? "Аналіз" : busy === "undo" ? "Адмена" : busy === "drive-download" ? "Спампоўванне з Google Drive" : busy === "drive" ? "Загрузка ў Google Drive" : mode === "rename" ? "Перайменаванне" : "Перамяшчэнне"}</strong><span className="progress-actions"><strong>{progress.current} / {progress.total} · {Math.round(progress.current / progress.total * 100)}%</strong>{busy === "analysis" && <button className="stop-analysis" onClick={() => api.cancelAnalysis()}>■ Спыніць аналіз</button>}{busy === "drive-download" && <button className="stop-analysis" onClick={() => api.cancelDriveDownload()}>■ Спыніць спампоўванне</button>}</span></div>
         <progress value={progress.current} max={progress.total} />
         {(progress.from || progress.filePath) && <p className="progress-file"><strong>{basename(progress.from || progress.filePath)}</strong><span>{progress.from || progress.filePath}</span>{progress.to && <span>→ {progress.to}</span>}{progress.error && <span className="row-error">{progress.error}</span>}</p>}
       </div>}
